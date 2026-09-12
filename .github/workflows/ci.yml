@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  domain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Domain tests
+        run: cargo test -p bluephoenix-domain --offline || cargo test -p bluephoenix-domain
+
+  desktop-typecheck:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --filter desktop
+      - run: pnpm exec tsc --noEmit
+
+  package-note:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Packaging reminder
+        run: |
+          echo "Signed Tauri installers require Apple/Windows certificates provided as secrets."
+          echo "Replace the updater pubkey in apps/desktop/src-tauri/tauri.conf.json before shipping."
+          test -f version.json
+          test -f apps/desktop/src-tauri/tauri.conf.json

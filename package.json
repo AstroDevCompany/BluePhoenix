@@ -1,0 +1,19 @@
+{
+  "name": "bluephoenix",
+  "private": true,
+  "version": "0.1.0",
+  "description": "BluePhoenix personal command center",
+  "scripts": {
+    "dev": "pnpm --filter desktop tauri dev",
+    "tauri": "pnpm --filter desktop tauri",
+    "desktop:dev": "pnpm --filter desktop tauri dev",
+    "desktop:build": "pnpm --filter desktop tauri build",
+    "api:dev": "cargo run -p bluephoenix-api",
+    "test:domain": "cargo test -p bluephoenix-domain",
+    "test": "cargo test"
+  },
+  "packageManager": "pnpm@10.0.0",
+  "engines": {
+    "node": ">=20"
+  }
+}

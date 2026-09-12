@@ -1,0 +1,546 @@
+use crate::ai_store;
+use crate::db;
+use crate::error::{AppError, AppResult};
+use crate::models::*;
+use crate::secrets;
+use crate::state::AppState;
+use bluephoenix_ai::prompts;
+use bluephoenix_ai::settings::AiSettings;
+use bluephoenix_ai::{
+    complete_with_fallback, parse_agent_prompt, parse_changelog, parse_commit, parse_prioritize, parse_search,
+    parse_todos, require_ready, stream_with_fallback, ChatMessage, CompletionRequest, OpenRouterProvider,
+    OPENROUTER_SECRET_KIND,
+};
+use bluephoenix_domain::ids::CategoryKind;
+use serde::Deserialize;
+use serde_json::json;
+use tauri::{AppHandle, Emitter, State};
+
+fn map_ai(err: bluephoenix_ai::AiError) -> AppError {
+    AppError::msg(err.user_message())
+}
+
+fn load_ready(state: &AppState) -> AppResult<(OpenRouterProvider, AiSettings, Vec<String>)> {
+    let settings = state.db.with(|c| Ok(ai_store::load_ai_settings(c)))?;
+    let key = secrets::openrouter_key().ok_or_else(|| map_ai(bluephoenix_ai::AiError::MissingKey))?;
+    require_ready(&settings, true).map_err(map_ai)?;
+    let models = settings.active_models();
+    Ok((OpenRouterProvider::new(key), settings, models))
+}
+
+async fn complete_text(state: &AppState, messages: Vec<ChatMessage>, json_mode: bool) -> AppResult<bluephoenix_ai::FallbackOutcome> {
+    let (provider, _settings, models) = load_ready(state)?;
+    let request = if json_mode {
+        CompletionRequest::json(models.first().cloned().unwrap_or_default(), messages)
+    } else {
+        CompletionRequest::chat(models.first().cloned().unwrap_or_default(), messages)
+    };
+    complete_with_fallback(&provider, &models, request).await.map_err(map_ai)
+}
+
+fn persist_openrouter_envelope(state: &AppState, plaintext: &str) -> AppResult<()> {
+    if !secrets::wrap_key_available() {
+        return Ok(());
+    }
+    let (ciphertext, nonce, wrap_params) = secrets::encrypt_secret(plaintext)?;
+    state
+        .db
+        .with(|c| db::store_secret_envelope(c, OPENROUTER_SECRET_KIND, &ciphertext, &nonce, wrap_params))?;
+    Ok(())
+}
+
+pub fn try_unwrap_after_auth(state: &AppState, email: &str, password: &str) -> AppResult<()> {
+    secrets::on_login(email, password)?;
+    let _ = state.db.with(|c| ai_store::set_account_email(c, email));
+    if secrets::has_openrouter_key() {
+        return Ok(());
+    }
+    if let Some((_, ct, nonce, params)) = state.db.with(|c| Ok(ai_store::load_openrouter_envelope(c)))? {
+        if let Ok(plain) = secrets::decrypt_secret(&ct, &nonce, &params, password, email) {
+            secrets::keyring_set(secrets::OPENROUTER_KEY, &plain)?;
+        }
+    }
+    Ok(())
+}
+
+pub fn try_unwrap_with_stored_key(state: &AppState) -> AppResult<()> {
+    if secrets::has_openrouter_key() || !secrets::wrap_key_available() {
+        return Ok(());
+    }
+    if let Some((_, ct, nonce, _)) = state.db.with(|c| Ok(ai_store::load_openrouter_envelope(c)))? {
+        if let Ok(plain) = secrets::decrypt_with_stored_key(&ct, &nonce) {
+            secrets::keyring_set(secrets::OPENROUTER_KEY, &plain)?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn ai_status(state: State<AppState>) -> AppResult<AiStatusDto> {
+    let settings = state.db.with(|c| Ok(ai_store::load_ai_settings(c)))?;
+    let key = secrets::openrouter_key();
+    let cloud = state
+        .db
+        .with(|c| Ok(ai_store::load_openrouter_envelope(c).is_some()))?;
+    Ok(AiStatusDto {
+        enabled: settings.enabled,
+        has_key: key.is_some(),
+        masked_key: key.as_deref().map(secrets::mask_key),
+        models: settings.models,
+        commit_follow_style: settings.commit_follow_style,
+        setup_dismissed: settings.setup_dismissed,
+        signed_in: secrets::wrap_key_available() || secrets::keyring_get("access_token").is_some(),
+        cloud_secret: cloud,
+    })
+}
+
+#[tauri::command]
+pub fn ai_save_settings(state: State<AppState>, settings: AiSettings) -> AppResult<AiSettings> {
+    state.db.with(|c| ai_store::save_ai_settings(c, &settings))
+}
+
+#[tauri::command]
+pub fn ai_set_key(state: State<AppState>, key: String) -> AppResult<AiStatusDto> {
+    let key = key.trim().to_string();
+    if key.is_empty() {
+        return Err(AppError::msg("API key is required"));
+    }
+    secrets::keyring_set(secrets::OPENROUTER_KEY, &key)?;
+    persist_openrouter_envelope(&state, &key)?;
+    ai_status(state)
+}
+
+#[tauri::command]
+pub fn ai_clear_key(state: State<AppState>) -> AppResult<AiStatusDto> {
+    secrets::keyring_delete(secrets::OPENROUTER_KEY);
+    ai_status(state)
+}
+
+#[tauri::command]
+pub fn ai_reveal_key() -> AppResult<String> {
+    secrets::openrouter_key().ok_or_else(|| AppError::msg("No API key is stored"))
+}
+
+#[tauri::command]
+pub async fn ai_test_connection(state: State<'_, AppState>) -> AppResult<serde_json::Value> {
+    let outcome = complete_text(
+        &state,
+        vec![
+            ChatMessage {
+                role: "system".into(),
+                content: "Reply with the single word OK.".into(),
+            },
+            ChatMessage {
+                role: "user".into(),
+                content: "ping".into(),
+            },
+        ],
+        false,
+    )
+    .await?;
+    Ok(json!({
+        "ok": true,
+        "model": outcome.response.model,
+        "fallbackUsed": outcome.fallback_used,
+        "text": outcome.response.text.trim(),
+    }))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatInput {
+    pub conversation_id: Option<String>,
+    pub project_id: Option<String>,
+    pub message: String,
+}
+
+#[tauri::command]
+pub async fn ai_chat_stream(app: AppHandle, state: State<'_, AppState>, input: ChatInput) -> AppResult<AiMessageDto> {
+    let message = input.message.trim().to_string();
+    if message.is_empty() {
+        return Err(AppError::msg("Message is required"));
+    }
+    let project_id = input.project_id.clone();
+    let conversation_id = state.db.with(|c| {
+        ai_store::ensure_conversation(c, input.conversation_id.as_deref(), project_id.as_deref())
+    })?;
+    state
+        .db
+        .with(|c| ai_store::insert_message(c, &conversation_id, "user", &message, None, false))?;
+    let history = state.db.with(|c| ai_store::list_messages(c, &conversation_id))?;
+    let bundle = if let Some(pid) = &project_id {
+        state.db.with(|c| ai_store::ai_project_bundle(c, pid)).ok()
+    } else {
+        None
+    };
+    let kind = bundle.as_ref().and_then(|b| b.snapshot.as_ref()).map(|s| s.kind);
+    let mut system = prompts::chat_system(kind);
+    if let Some(bundle) = &bundle {
+        system.push_str("\n\nProject context:\n");
+        system.push_str(&prompts::bundle_to_prompt(bundle));
+        if let Some(pid) = &project_id {
+            let chunks = state
+                .db
+                .with(|c| ai_store::retrieve_chunks(c, pid, &message, 6))
+                .unwrap_or_default();
+            let empty = chunks.is_empty();
+            let rendered = chunks
+                .iter()
+                .map(|c| {
+                    format!(
+                        "[{} p.{} {}] {}",
+                        c.document_name,
+                        c.page.map(|p| p.to_string()).unwrap_or_else(|| "?".into()),
+                        c.heading.clone().unwrap_or_default(),
+                        c.text
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            system.push_str("\n");
+            system.push_str(&prompts::document_qa_suffix(&rendered, empty));
+        }
+    }
+    let mut messages = vec![ChatMessage {
+        role: "system".into(),
+        content: system,
+    }];
+    for m in history.iter().rev().take(16).collect::<Vec<_>>().into_iter().rev() {
+        if m.role == "system" {
+            continue;
+        }
+        messages.push(ChatMessage {
+            role: m.role.clone(),
+            content: m.content.clone(),
+        });
+    }
+    let (provider, _settings, models) = load_ready(&state)?;
+    let cid = conversation_id.clone();
+    let app_for_delta = app.clone();
+    let request = CompletionRequest::chat(models.first().cloned().unwrap_or_default(), messages);
+    let outcome = stream_with_fallback(&provider, &models, request, move |delta| {
+        let _ = app_for_delta.emit(
+            "ai-chat-delta",
+            json!({ "conversationId": cid, "delta": delta }),
+        );
+    })
+    .await
+    .map_err(map_ai)?;
+    let assistant_id = state.db.with(|c| {
+        ai_store::insert_message(
+            c,
+            &conversation_id,
+            "assistant",
+            &outcome.response.text,
+            Some(&outcome.response.model),
+            outcome.fallback_used,
+        )
+    })?;
+    let _ = app.emit(
+        "ai-chat-done",
+        json!({
+            "conversationId": conversation_id,
+            "model": outcome.response.model,
+            "fallbackUsed": outcome.fallback_used,
+        }),
+    );
+    let messages = state.db.with(|c| ai_store::list_messages(c, &conversation_id))?;
+    messages
+        .into_iter()
+        .find(|m| m.id == assistant_id)
+        .ok_or_else(|| AppError::msg("Message missing after save"))
+}
+
+#[tauri::command]
+pub fn ai_list_conversations(state: State<AppState>, project_id: Option<String>) -> AppResult<Vec<AiConversationDto>> {
+    state
+        .db
+        .with(|c| ai_store::list_conversations(c, project_id.as_deref()))
+}
+
+#[tauri::command]
+pub fn ai_list_messages(state: State<AppState>, conversation_id: String) -> AppResult<Vec<AiMessageDto>> {
+    state.db.with(|c| ai_store::list_messages(c, &conversation_id))
+}
+
+#[tauri::command]
+pub fn ai_new_conversation(state: State<AppState>, project_id: Option<String>) -> AppResult<String> {
+    state.db.with(|c| ai_store::new_conversation(c, project_id.as_deref()))
+}
+
+#[tauri::command]
+pub fn ai_clear_conversation(state: State<AppState>, conversation_id: String) -> AppResult<()> {
+    state.db.with(|c| ai_store::clear_conversation(c, &conversation_id))
+}
+
+#[tauri::command]
+pub fn ai_project_bundle(
+    state: State<AppState>,
+    project_id: String,
+) -> AppResult<bluephoenix_domain::context::AiProjectBundle> {
+    state.db.with(|c| ai_store::ai_project_bundle(c, &project_id))
+}
+
+#[tauri::command]
+pub async fn ai_interpret_search(state: State<'_, AppState>, query: String) -> AppResult<serde_json::Value> {
+    let local = state.db.with(|c| db::search(c, &query))?;
+    let settings = state.db.with(|c| Ok(ai_store::load_ai_settings(c)))?;
+    if require_ready(&settings, secrets::has_openrouter_key()).is_err() {
+        return Ok(json!({ "hits": local, "explanation": null, "ai": false }));
+    }
+    let index = state.db.with(|c| ai_store::compact_project_index(c))?;
+    let outcome = complete_text(
+        &state,
+        vec![
+            ChatMessage {
+                role: "system".into(),
+                content: "Return JSON only.".into(),
+            },
+            ChatMessage {
+                role: "user".into(),
+                content: prompts::search_prompt(&serde_json::to_string(&index).unwrap_or_default(), &query),
+            },
+        ],
+        true,
+    )
+    .await?;
+    let parsed = parse_search(&outcome.response.text);
+    Ok(json!({
+        "hits": local,
+        "ai": true,
+        "interpretation": parsed,
+        "fallbackUsed": outcome.fallback_used,
+        "model": outcome.response.model,
+    }))
+}
+
+fn require_software(state: &AppState, project_id: &str) -> AppResult<CategoryKind> {
+    let kind = state.db.with(|c| db::project_kind(c, project_id))?;
+    if kind != CategoryKind::Software {
+        return Err(AppError::msg("This action is available on software projects"));
+    }
+    Ok(kind)
+}
+
+#[tauri::command]
+pub async fn ai_prioritize_todos(state: State<'_, AppState>, project_id: String) -> AppResult<serde_json::Value> {
+    require_software(&state, &project_id)?;
+    let bundle = state.db.with(|c| ai_store::ai_project_bundle(c, &project_id))?;
+    let json_todos = serde_json::to_string(&bundle.todos).unwrap_or_else(|_| "[]".into());
+    let outcome = complete_text(
+        &state,
+        vec![
+            ChatMessage {
+                role: "system".into(),
+                content: "Return JSON only.".into(),
+            },
+            ChatMessage {
+                role: "user".into(),
+                content: prompts::prioritize_prompt(&json_todos),
+            },
+        ],
+        true,
+    )
+    .await?;
+    let parsed = parse_prioritize(&outcome.response.text).ok_or_else(|| AppError::msg("Model returned invalid JSON"))?;
+    Ok(json!({ "result": parsed, "fallbackUsed": outcome.fallback_used, "model": outcome.response.model }))
+}
+
+#[tauri::command]
+pub fn ai_apply_todo_priorities(state: State<AppState>, order: Vec<String>) -> AppResult<()> {
+    state.db.with(|c| {
+        for (i, id) in order.iter().enumerate() {
+            let priority = match i {
+                0 | 1 => "urgent",
+                2 | 3 => "high",
+                4 | 5 => "medium",
+                _ => "low",
+            };
+            ai_store::update_todo_priority(c, id, priority)?;
+        }
+        Ok(())
+    })
+}
+
+#[tauri::command]
+pub async fn ai_generate_prompt(state: State<'_, AppState>, project_id: String, extra: Option<String>) -> AppResult<serde_json::Value> {
+    require_software(&state, &project_id)?;
+    let bundle = state.db.with(|c| ai_store::ai_project_bundle(c, &project_id))?;
+    let outcome = complete_text(
+        &state,
+        vec![
+            ChatMessage {
+                role: "system".into(),
+                content: "Return JSON only.".into(),
+            },
+            ChatMessage {
+                role: "user".into(),
+                content: prompts::agent_prompt_builder(&prompts::bundle_to_prompt(&bundle), extra.as_deref().unwrap_or("")),
+            },
+        ],
+        true,
+    )
+    .await?;
+    let parsed = parse_agent_prompt(&outcome.response.text).ok_or_else(|| AppError::msg("Model returned invalid JSON"))?;
+    Ok(json!({ "result": parsed, "fallbackUsed": outcome.fallback_used }))
+}
+
+#[tauri::command]
+pub async fn ai_summarize_changelog(state: State<'_, AppState>, project_id: String, version_id: Option<String>) -> AppResult<String> {
+    require_software(&state, &project_id)?;
+    let versions = state.db.with(|c| db::list_versions(c, &project_id))?;
+    let body = if let Some(id) = version_id {
+        versions.iter().find(|v| v.id == id).map(|v| v.changelog.clone()).unwrap_or_default()
+    } else {
+        versions.first().map(|v| v.changelog.clone()).unwrap_or_default()
+    };
+    if body.trim().is_empty() {
+        return Err(AppError::msg("No changelog text to summarize"));
+    }
+    let outcome = complete_text(
+        &state,
+        vec![ChatMessage {
+            role: "user".into(),
+            content: prompts::changelog_summarize_prompt(&body),
+        }],
+        false,
+    )
+    .await?;
+    Ok(outcome.response.text)
+}
+
+#[tauri::command]
+pub async fn ai_generate_changelog(state: State<'_, AppState>, project_id: String) -> AppResult<serde_json::Value> {
+    require_software(&state, &project_id)?;
+    let (git_path, folder, versions) = state.db.with(|c| {
+        let git = db::load_settings(c).git_path;
+        let (local, _) = db::project_binding(c, &state.db.device_id, &project_id);
+        Ok((git, local, db::list_versions(c, &project_id)?))
+    })?;
+    let path = folder.ok_or(AppError::FolderMissing)?;
+    let last = versions.first().map(|v| v.version.clone());
+    let log = crate::git::log_since(&git_path, std::path::Path::new(&path), last.as_deref());
+    let version_text = versions
+        .iter()
+        .take(6)
+        .map(|v| format!("{} {}", v.version, v.changelog))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let outcome = complete_text(
+        &state,
+        vec![
+            ChatMessage {
+                role: "system".into(),
+                content: "Return JSON only.".into(),
+            },
+            ChatMessage {
+                role: "user".into(),
+                content: prompts::changelog_generate_prompt(&log, &version_text),
+            },
+        ],
+        true,
+    )
+    .await?;
+    let parsed = parse_changelog(&outcome.response.text).ok_or_else(|| AppError::msg("Model returned invalid JSON"))?;
+    Ok(json!({ "result": parsed, "gitLog": log, "fallbackUsed": outcome.fallback_used }))
+}
+
+#[tauri::command]
+pub async fn ai_todos_from_changelog(state: State<'_, AppState>, project_id: String, changelog: String) -> AppResult<serde_json::Value> {
+    require_software(&state, &project_id)?;
+    let outcome = complete_text(
+        &state,
+        vec![
+            ChatMessage {
+                role: "system".into(),
+                content: "Return JSON only.".into(),
+            },
+            ChatMessage {
+                role: "user".into(),
+                content: prompts::todos_from_changelog_prompt(&changelog),
+            },
+        ],
+        true,
+    )
+    .await?;
+    let parsed = parse_todos(&outcome.response.text).ok_or_else(|| AppError::msg("Model returned invalid JSON"))?;
+    Ok(json!({ "todos": parsed, "fallbackUsed": outcome.fallback_used }))
+}
+
+#[tauri::command]
+pub async fn ai_suggest_commit(state: State<'_, AppState>, project_id: String) -> AppResult<serde_json::Value> {
+    require_software(&state, &project_id)?;
+    let (git_path, folder, follow) = state.db.with(|c| {
+        let settings = db::load_settings(c);
+        let ai = ai_store::load_ai_settings(c);
+        let (local, _) = db::project_binding(c, &state.db.device_id, &project_id);
+        Ok((settings.git_path, local, ai.commit_follow_style))
+    })?;
+    let path = folder.ok_or(AppError::FolderMissing)?;
+    let ctx = crate::git::diff_context(&git_path, std::path::Path::new(&path));
+    if !ctx.dirty && ctx.diff.trim().is_empty() {
+        return Err(AppError::msg("Working tree is clean — nothing to commit"));
+    }
+    let log = ctx.subjects.join("\n");
+    let outcome = complete_text(
+        &state,
+        vec![
+            ChatMessage {
+                role: "system".into(),
+                content: "Return JSON only. Never commit.".into(),
+            },
+            ChatMessage {
+                role: "user".into(),
+                content: prompts::commit_prompt(&ctx.diff, &log, follow),
+            },
+        ],
+        true,
+    )
+    .await?;
+    let parsed = parse_commit(&outcome.response.text).ok_or_else(|| AppError::msg("Model returned invalid JSON"))?;
+    Ok(json!({
+        "result": parsed,
+        "styleFollowed": follow && ctx.has_history,
+        "hasHistory": ctx.has_history,
+        "truncated": ctx.truncated,
+        "fallbackUsed": outcome.fallback_used,
+    }))
+}
+
+#[tauri::command]
+pub fn git_log(state: State<AppState>, project_id: String) -> AppResult<Vec<String>> {
+    state.db.with(|c| {
+        let git = db::load_settings(c).git_path;
+        let (local, _) = db::project_binding(c, &state.db.device_id, &project_id);
+        let path = local.ok_or(AppError::FolderMissing)?;
+        Ok(crate::git::recent_subjects(&git, std::path::Path::new(&path), 20))
+    })
+}
+
+#[tauri::command]
+pub fn git_diff(state: State<AppState>, project_id: String) -> AppResult<crate::git::GitDiffContext> {
+    state.db.with(|c| {
+        let git = db::load_settings(c).git_path;
+        let (local, _) = db::project_binding(c, &state.db.device_id, &project_id);
+        let path = local.ok_or(AppError::FolderMissing)?;
+        Ok(crate::git::diff_context(&git, std::path::Path::new(&path)))
+    })
+}
+
+#[tauri::command]
+pub fn list_document_records(state: State<AppState>, project_id: String) -> AppResult<Vec<DocumentRecordDto>> {
+    state.db.with(|c| ai_store::list_document_records(c, &project_id))
+}
+
+#[cfg(test)]
+mod tests {
+    use bluephoenix_ai::{require_ready, AiSettings};
+
+    #[test]
+    fn chat_off_when_disabled() {
+        let mut s = AiSettings::default();
+        s.enabled = false;
+        s.models[0] = "x".into();
+        assert!(require_ready(&s, true).is_err());
+    }
+}

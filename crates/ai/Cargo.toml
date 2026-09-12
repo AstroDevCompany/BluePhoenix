@@ -1,0 +1,20 @@
+[package]
+name = "bluephoenix-ai"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+bluephoenix-domain.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+tokio = { version = "1", features = ["macros", "rt", "time"] }
+futures-util = "0.3"
+async-trait = "0.1"
+pdf-extract = "0.9"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+quick-xml = "0.37"
+scraper = "0.23"
+pulldown-cmark = { version = "0.13", default-features = false }
