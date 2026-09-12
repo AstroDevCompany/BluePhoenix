@@ -27,7 +27,7 @@ export function TimeEntries({ projectId, onChanged }: { projectId: string; onCha
         <EmptyState title="No entries yet" body="Start the timer or add a manual range." />
       ) : (
         rows.slice(0, 40).map((row) => (
-          <div key={row.id} className="row" style={{ margin: "6px 0", justifyContent: "space-between" }}>
+          <div key={row.id} className="list-row spread">
             <span>
               {formatDate(row.startedAt)} · {formatDuration(row.seconds)}
               {row.topicTitle ? ` · ${row.topicTitle}` : ""}

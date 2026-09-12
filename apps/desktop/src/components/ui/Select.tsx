@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef } from "react";
+import { useOpenTransition } from "./useOpenTransition";
 
 export function Select({
   value,
@@ -11,18 +12,18 @@ export function Select({
   options: { value: string; label: string }[];
   ariaLabel?: string;
 }) {
-  const [open, setOpen] = useState(false);
+  const { open, visible, hide, toggle } = useOpenTransition();
   const root = useRef<HTMLDivElement>(null);
   const listId = useId();
   const current = options.find((o) => o.value === value) ?? options[0];
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
-      if (!root.current?.contains(e.target as Node)) setOpen(false);
+      if (!root.current?.contains(e.target as Node)) hide();
     };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
-  }, []);
+  }, [hide]);
 
   return (
     <div className="select-root" ref={root}>
@@ -33,13 +34,17 @@ export function Select({
         aria-expanded={open}
         aria-controls={listId}
         aria-label={ariaLabel}
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggle}
       >
         <span>{current?.label ?? "Select"}</span>
         <span className="muted">▾</span>
       </button>
-      {open ? (
-        <ul className="select-menu menu-pop" role="listbox" id={listId}>
+      {visible ? (
+        <ul
+          className={`select-menu menu-pop ${open ? "is-open" : "is-closing"}`}
+          role="listbox"
+          id={listId}
+        >
           {options.map((opt) => (
             <li key={opt.value}>
               <button
@@ -49,7 +54,7 @@ export function Select({
                 className={`select-option ${opt.value === value ? "active" : ""}`}
                 onClick={() => {
                   onChange(opt.value);
-                  setOpen(false);
+                  hide();
                 }}
               >
                 {opt.label}

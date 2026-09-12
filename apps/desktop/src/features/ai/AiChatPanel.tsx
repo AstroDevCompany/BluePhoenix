@@ -3,6 +3,7 @@ import { ArrowUp, MessageSquarePlus, Trash2 } from "lucide-react";
 import { listen } from "@tauri-apps/api/event";
 import { api, formatError } from "../../lib/ipc";
 import { useUi } from "../../stores/ui";
+import { IconButton } from "../../components/ui/Tooltip";
 import type { AiMessage } from "../../lib/types";
 
 const COMPOSER_LINE = 21;
@@ -108,21 +109,17 @@ export function AiChatPanel({ projectId }: { projectId?: string }) {
     <aside className="ai-rail" aria-label="AI chat" aria-hidden={!open} {...(!open ? { inert: true } : {})}>
       <div className="ai-rail-inner">
         <div className="ai-rail-head">
-          <button
+          <IconButton
             className="btn icon ghost"
-            type="button"
-            aria-label="New chat"
-            title="New chat"
+            label="New chat"
             onClick={() => void load(null)}
           >
             <MessageSquarePlus size={16} />
-          </button>
+          </IconButton>
           <strong className="ai-rail-title">Chat</strong>
-          <button
+          <IconButton
             className="btn icon ghost"
-            type="button"
-            aria-label="Clear chat"
-            title="Clear chat"
+            label="Clear chat"
             disabled={!conversationId}
             onClick={async () => {
               if (!conversationId) return;
@@ -132,7 +129,7 @@ export function AiChatPanel({ projectId }: { projectId?: string }) {
             }}
           >
             <Trash2 size={16} />
-          </button>
+          </IconButton>
         </div>
         <div className="ai-rail-body" role="log" aria-live="polite">
           {messages.map((m) => (
@@ -163,15 +160,14 @@ export function AiChatPanel({ projectId }: { projectId?: string }) {
                 }
               }}
             />
-            <button
+            <IconButton
               className="btn icon primary ai-composer-send"
               type="submit"
-              aria-label="Send"
-              title="Send"
+              label="Send"
               disabled={busy || !draft.trim()}
             >
               <ArrowUp size={16} />
-            </button>
+            </IconButton>
           </div>
         </form>
       </div>

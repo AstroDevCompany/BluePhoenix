@@ -190,6 +190,15 @@ impl TagKind {
             Self::Custom => "custom",
         }
     }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "language" => Some(Self::Language),
+            "framework" => Some(Self::Framework),
+            "custom" => Some(Self::Custom),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
-import type { Bootstrap } from "../../lib/types";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Plus, X } from "lucide-react";
+import type { Bootstrap, Tag } from "../../lib/types";
 import { api, formatError } from "../../lib/ipc";
 import { useUi } from "../../stores/ui";
+import { IconButton, Tooltip } from "../../components/ui/Tooltip";
 
 export function CreateProjectDialog({
   bootstrap,
@@ -37,7 +39,10 @@ export function CreateProjectDialog({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      const target = e.target as HTMLElement | null;
+      if (target?.closest(".chip-editor")) return;
+      onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -108,8 +113,20 @@ export function CreateProjectDialog({
               <span className="label">Website</span>
               <input className="input" value={website} onChange={(e) => setWebsite(e.target.value)} />
             </label>
-            <ChipPick label="Languages" items={languages} selected={langIds} onToggle={(id) => toggle(langIds, id, setLangIds)} />
-            <ChipPick label="Frameworks" items={frameworks} selected={fwIds} onToggle={(id) => toggle(fwIds, id, setFwIds)} />
+            <ChipPick
+              label="Languages"
+              kind="language"
+              items={languages}
+              selected={langIds}
+              onToggle={(id) => toggle(langIds, id, setLangIds)}
+            />
+            <ChipPick
+              label="Frameworks"
+              kind="framework"
+              items={frameworks}
+              selected={fwIds}
+              onToggle={(id) => toggle(fwIds, id, setFwIds)}
+            />
           </>
         ) : null}
         {fields === "university" ? (
@@ -132,14 +149,19 @@ export function CreateProjectDialog({
 }
 
 function PathField({ label, value, onChange, folder }: { label: string; value: string; onChange: (v: string) => void; folder?: boolean }) {
+  const toast = useUi((s) => s.showToast);
   return (
     <label className="field">
       <span className="label">{label}</span>
       <div className="row">
         <input className="input" value={value} onChange={(e) => onChange(e.target.value)} style={{ flex: 1 }} />
         <button className="btn" type="button" onClick={async () => {
-          const picked = folder ? await api.pickFolder() : await api.pickFile();
-          if (picked) onChange(picked);
+          try {
+            const picked = folder ? await api.pickFolder() : await api.pickFile();
+            if (picked) onChange(picked);
+          } catch (e) {
+            toast(formatError(e), "error");
+          }
         }}>Browse</button>
       </div>
     </label>
@@ -148,24 +170,143 @@ function PathField({ label, value, onChange, folder }: { label: string; value: s
 
 function ChipPick({
   label,
+  kind,
   items,
   selected,
   onToggle,
 }: {
   label: string;
+  kind: "language" | "framework";
   items: { id: string; name: string }[];
   selected: string[];
   onToggle: (id: string) => void;
 }) {
+  const toast = useUi((s) => s.showToast);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const committing = useRef(false);
+  const [hidden, setHidden] = useState<Set<string>>(() => new Set());
+  const [extras, setExtras] = useState<Tag[]>([]);
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (adding) inputRef.current?.focus();
+  }, [adding]);
+
+  const visible = useMemo(() => {
+    const byId = new Map<string, { id: string; name: string }>();
+    for (const item of items) byId.set(item.id, item);
+    for (const item of extras) byId.set(item.id, item);
+    return [...byId.values()].filter((item) => !hidden.has(item.id));
+  }, [items, extras, hidden]);
+
+  const closeEditor = () => {
+    setAdding(false);
+    setDraft("");
+  };
+
+  const commit = async () => {
+    if (committing.current) return;
+    const name = draft.trim();
+    if (!name) {
+      closeEditor();
+      return;
+    }
+    committing.current = true;
+    const match = [...items, ...extras].find((item) => item.name.toLowerCase() === name.toLowerCase());
+    if (match) {
+      setHidden((current) => {
+        if (!current.has(match.id)) return current;
+        const next = new Set(current);
+        next.delete(match.id);
+        return next;
+      });
+      if (!selected.includes(match.id)) onToggle(match.id);
+      committing.current = false;
+      closeEditor();
+      return;
+    }
+    setSaving(true);
+    try {
+      const tag = await api.createCustomTag(name, kind);
+      setExtras((current) => (current.some((item) => item.id === tag.id) ? current : [...current, tag]));
+      if (!selected.includes(tag.id)) onToggle(tag.id);
+      closeEditor();
+    } catch (e) {
+      toast(formatError(e), "error");
+    } finally {
+      committing.current = false;
+      setSaving(false);
+    }
+  };
+
+  const remove = (id: string) => {
+    if (selected.includes(id)) onToggle(id);
+    setHidden((current) => new Set(current).add(id));
+    setExtras((current) => current.filter((item) => item.id !== id));
+  };
+
   return (
     <div className="field">
       <div className="label">{label}</div>
-      <div className="row">
-        {items.map((item) => (
-          <button key={item.id} type="button" className={`btn ${selected.includes(item.id) ? "primary" : ""}`} onClick={() => onToggle(item.id)} style={{ height: 28 }}>
-            {item.name}
-          </button>
+      <div className="chip-row">
+        {visible.map((item) => (
+          <div key={item.id} className="chip-wrap">
+            <button
+              type="button"
+              className={`btn chip ${selected.includes(item.id) ? "primary" : ""}`}
+              onClick={() => onToggle(item.id)}
+            >
+              {item.name}
+            </button>
+            <Tooltip content={`Remove ${item.name}`}>
+              <button
+                type="button"
+                className="chip-x"
+                aria-label={`Remove ${item.name}`}
+                onClick={() => remove(item.id)}
+              >
+                <X size={11} strokeWidth={2.5} />
+              </button>
+            </Tooltip>
+          </div>
         ))}
+        {adding ? (
+          <input
+            ref={inputRef}
+            className="input chip-editor"
+            value={draft}
+            disabled={saving}
+            placeholder="New tag"
+            aria-label={`Add ${label.toLowerCase().replace(/s$/, "")}`}
+            style={{ width: `${Math.max(8, draft.length + 2)}ch` }}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => {
+              if (!saving) void commit();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                e.stopPropagation();
+                void commit();
+              }
+              if (e.key === "Escape") {
+                e.preventDefault();
+                e.stopPropagation();
+                closeEditor();
+              }
+            }}
+          />
+        ) : (
+          <IconButton
+            className="btn chip chip-add"
+            label={`Add ${label.toLowerCase()}`}
+            onClick={() => setAdding(true)}
+          >
+            <Plus size={14} />
+          </IconButton>
+        )}
       </div>
     </div>
   );

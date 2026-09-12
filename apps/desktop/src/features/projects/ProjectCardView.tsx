@@ -1,10 +1,18 @@
+import type { PointerEvent } from "react";
 import { FolderOpen, Github, Globe, Play, Terminal, Code2 } from "lucide-react";
 import type { Category, ProjectCard } from "../../lib/types";
 import { hasCap } from "../../lib/types";
 import { formatDuration } from "../../lib/format";
 import { TrophyRow } from "../achievements/TrophyRow";
+import { IconButton } from "../../components/ui/Tooltip";
 import { api, formatError } from "../../lib/ipc";
 import { useUi } from "../../stores/ui";
+
+function onCardSpot(e: PointerEvent<HTMLElement>) {
+  const r = e.currentTarget.getBoundingClientRect();
+  e.currentTarget.style.setProperty("--spot-x", `${((e.clientX - r.left) / r.width) * 100}%`);
+  e.currentTarget.style.setProperty("--spot-y", `${((e.clientY - r.top) / r.height) * 100}%`);
+}
 
 export function ProjectCardView({
   project,
@@ -24,7 +32,14 @@ export function ProjectCardView({
         ? SoftwareBody
         : GenericBody;
   return (
-    <article className="project-card" onClick={onOpen} onKeyDown={(e) => e.key === "Enter" && onOpen()} role="button" tabIndex={0}>
+    <article
+      className="project-card"
+      onClick={onOpen}
+      onKeyDown={(e) => e.key === "Enter" && onOpen()}
+      onPointerMove={onCardSpot}
+      role="button"
+      tabIndex={0}
+    >
       <div className="row" style={{ justifyContent: "space-between" }}>
         <strong style={{ fontSize: 16 }}>{project.name}</strong>
         <span className="badge">{project.status}</span>
@@ -89,13 +104,13 @@ function SoftwareBody({
         <button className="btn" type="button" onClick={() => run(() => api.gitRun(project.id, "pull"), "Pulled")}>Pull</button>
         {project.localPath ? (
           <>
-            <button className="btn" type="button" onClick={() => run(() => api.openVscode(project.localPath!), "Opened VS Code")}><Code2 size={14} /></button>
-            <button className="btn" type="button" onClick={() => run(() => api.openPath(project.localPath!), "Opened folder")}><FolderOpen size={14} /></button>
-            <button className="btn" type="button" onClick={() => run(() => api.openTerminal(project.localPath!), "Opened terminal")}><Terminal size={14} /></button>
+            <IconButton label="VS Code" className="btn icon" onClick={() => run(() => api.openVscode(project.localPath!), "Opened VS Code")}><Code2 size={14} /></IconButton>
+            <IconButton label="Open folder" className="btn icon" onClick={() => run(() => api.openPath(project.localPath!), "Opened folder")}><FolderOpen size={14} /></IconButton>
+            <IconButton label="Open terminal" className="btn icon" onClick={() => run(() => api.openTerminal(project.localPath!), "Opened terminal")}><Terminal size={14} /></IconButton>
           </>
         ) : null}
-        {project.githubUrl ? <button className="btn" type="button" onClick={() => run(() => api.openUrl(project.githubUrl!), "Opened GitHub")}><Github size={14} /></button> : null}
-        {project.websiteUrl ? <button className="btn" type="button" onClick={() => run(() => api.openUrl(project.websiteUrl!), "Opened website")}><Globe size={14} /></button> : null}
+        {project.githubUrl ? <IconButton label="GitHub" className="btn icon" onClick={() => run(() => api.openUrl(project.githubUrl!), "Opened GitHub")}><Github size={14} /></IconButton> : null}
+        {project.websiteUrl ? <IconButton label="Website" className="btn icon" onClick={() => run(() => api.openUrl(project.websiteUrl!), "Opened website")}><Globe size={14} /></IconButton> : null}
       </div>
     </>
   );

@@ -16,7 +16,7 @@ export function ExamsPage({ category }: { category: Category }) {
         <EmptyState title="No exam attempts" body="Record attempts from a course page. Failed attempts stay out of GPA unless you change that in Settings." />
       ) : (
         exams.map((e) => (
-          <div key={e.id} className="muted" style={{ padding: "8px 0" }}>
+          <div key={e.id} className="list-row muted">
             {e.projectName} · {formatDate(e.date)} · {e.status} {e.grade != null ? `· ${e.grade}/30` : ""}
           </div>
         ))

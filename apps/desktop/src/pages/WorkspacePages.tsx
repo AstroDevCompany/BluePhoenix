@@ -86,7 +86,7 @@ function Overview({
         <h2 className="h2">Recent activity</h2>
         {activity.length === 0 ? <p className="muted">Nothing recorded yet.</p> : null}
         {activity.slice(0, 8).map((a) => (
-          <div key={a.id} className="muted" style={{ padding: "6px 0" }}>{a.projectName ? `${a.projectName} · ` : ""}{a.eventType} · {formatDate(a.createdAt)}</div>
+          <div key={a.id} className="list-row muted">{a.projectName ? `${a.projectName} · ` : ""}{a.eventType} · {formatDate(a.createdAt)}</div>
         ))}
       </div>
     </div>

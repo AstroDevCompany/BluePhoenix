@@ -16,7 +16,7 @@ export function CommandsPage({ category }: { category: Category }) {
         <EmptyState title="No pinned commands" body="Pin a command on a software project to see it here." />
       ) : (
         pinned.map((p) => (
-          <div key={p.id} className="row" style={{ margin: "8px 0" }}>
+          <div key={p.id} className="list-row">
             <strong>{p.name}</strong>
             <span className="muted">{p.pinnedCommand?.name}</span>
           </div>

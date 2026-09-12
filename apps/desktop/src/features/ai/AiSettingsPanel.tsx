@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, formatError } from "../../lib/ipc";
 import { useUi } from "../../stores/ui";
+import { IconButton } from "../../components/ui/Tooltip";
 import type { AiStatus } from "../../lib/types";
 
 export function AiSettingsPanel() {
@@ -125,8 +126,8 @@ export function AiSettingsPanel() {
             }}
             onBlur={() => void saveModels(status.models)}
           />
-          <button className="btn" type="button" onClick={() => move(i, -1)} aria-label="Move up">↑</button>
-          <button className="btn" type="button" onClick={() => move(i, 1)} aria-label="Move down">↓</button>
+          <IconButton className="btn" label="Move up" onClick={() => move(i, -1)}>↑</IconButton>
+          <IconButton className="btn" label="Move down" onClick={() => move(i, 1)}>↓</IconButton>
         </div>
       ))}
       </div>

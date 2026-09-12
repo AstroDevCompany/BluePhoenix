@@ -19,14 +19,14 @@ export function ActivityPage() {
         <VirtualList
           items={rows}
           render={(r) => (
-            <div className="muted" style={{ padding: "8px 0" }}>
+            <div className="list-row muted">
               {r.projectName ? `${r.projectName} · ` : ""}{r.eventType} · {formatDate(r.createdAt)}
             </div>
           )}
         />
       ) : (
         rows.map((r) => (
-          <div key={r.id} className="muted" style={{ padding: "8px 0" }}>
+          <div key={r.id} className="list-row muted">
             {r.projectName ? `${r.projectName} · ` : ""}{r.eventType} · {formatDate(r.createdAt)}
           </div>
         ))

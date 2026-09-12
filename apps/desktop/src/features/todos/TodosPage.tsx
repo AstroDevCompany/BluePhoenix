@@ -18,7 +18,7 @@ export function TodosPage({ category }: { category: Category }) {
         <VirtualList
           items={todos}
           render={(t) => (
-            <label className="row" style={{ margin: "8px 0" }}>
+            <label className="list-row">
               <input
                 type="checkbox"
                 checked={t.status === "completed"}
@@ -35,7 +35,7 @@ export function TodosPage({ category }: { category: Category }) {
         />
       ) : (
         todos.map((t) => (
-          <label key={t.id} className="row" style={{ margin: "8px 0" }}>
+          <label key={t.id} className="list-row">
             <input
               type="checkbox"
               checked={t.status === "completed"}

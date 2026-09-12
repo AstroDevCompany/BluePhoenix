@@ -9,7 +9,7 @@ use bluephoenix_domain::exams::{self, ExamAttemptView};
 use bluephoenix_domain::gpa::{self, CourseGradeInput, GpaConfig};
 use bluephoenix_domain::ids::{
     new_id, CategoryKind, ExamStatus, FITNESS_CATEGORY_ID, PERSONAL_CATEGORY_ID,
-    PHOTOGRAPHY_CATEGORY_ID, SOFTWARE_CATEGORY_ID, UNIVERSITY_CATEGORY_ID,
+    PHOTOGRAPHY_CATEGORY_ID, SOFTWARE_CATEGORY_ID, TagKind, UNIVERSITY_CATEGORY_ID,
 };
 use bluephoenix_domain::semver_check::is_at_least_one;
 use bluephoenix_domain::terminology::{self, default_todo_kinds};
@@ -453,18 +453,47 @@ pub fn list_tags(conn: &Connection) -> AppResult<Vec<TagDto>> {
     Ok(rows.filter_map(|r| r.ok()).collect())
 }
 
-pub fn create_custom_tag(conn: &Connection, name: &str) -> AppResult<TagDto> {
+pub fn create_custom_tag(conn: &Connection, name: &str, kind: &str) -> AppResult<TagDto> {
     let name = required_name(name, "tag")?;
+    let kind = TagKind::parse(kind).ok_or_else(|| AppError::msg("Tag kind must be language, framework, or custom"))?;
+    let kind_str = kind.as_str();
+    if let Some((id, existing_name, existing_kind, deleted_at)) = conn
+        .query_row(
+            "SELECT id, name, kind, deleted_at FROM tags WHERE name = ?1 COLLATE NOCASE AND kind = ?2",
+            params![name, kind_str],
+            |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                    r.get::<_, Option<String>>(3)?,
+                ))
+            },
+        )
+        .optional()?
+    {
+        if deleted_at.is_some() {
+            conn.execute(
+                "UPDATE tags SET deleted_at=NULL, name=?1, updated_at=?2, revision=revision+1 WHERE id=?3",
+                params![name, now(), id],
+            )?;
+        }
+        return Ok(TagDto {
+            id,
+            name: existing_name,
+            kind: existing_kind,
+        });
+    }
     let id = new_id();
     let ts = now();
     conn.execute(
-        "INSERT INTO tags (id, name, kind, created_at, updated_at, revision) VALUES (?1,?2,'custom',?3,?3,1)",
-        params![id, name, ts],
+        "INSERT INTO tags (id, name, kind, created_at, updated_at, revision) VALUES (?1,?2,?3,?4,?4,1)",
+        params![id, name, kind_str, ts],
     )?;
     Ok(TagDto {
         id,
         name,
-        kind: "custom".into(),
+        kind: kind_str.into(),
     })
 }
 

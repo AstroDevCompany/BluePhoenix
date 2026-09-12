@@ -31,7 +31,7 @@ export const api = {
   createCustomCategory: (name: string, icon: string, accent: string) =>
     invoke<Category>("create_custom_category", { name, icon, accent }),
   listTags: () => invoke<Tag[]>("list_tags"),
-  createCustomTag: (name: string) => invoke<Tag>("create_custom_tag", { name }),
+  createCustomTag: (name: string, kind?: string) => invoke<Tag>("create_custom_tag", { name, kind }),
   listProjects: (categoryId: string, includeArchived = false) =>
     invoke<ProjectCard[]>("list_projects", { categoryId, includeArchived }),
   getProject: (id: string) => invoke<ProjectCard>("get_project", { id }),

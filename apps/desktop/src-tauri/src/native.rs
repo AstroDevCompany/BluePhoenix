@@ -112,9 +112,9 @@ pub fn open_terminal(preference: &str, folder: &Path) -> AppResult<()> {
     if !folder.exists() {
         return Err(AppError::FolderMissing);
     }
-    let pref = preference.trim().to_lowercase();
     #[cfg(target_os = "windows")]
     {
+        let pref = preference.trim().to_lowercase();
         if pref == "cmd" {
             Command::new("cmd")
                 .args(["/K", &format!("cd /d {}", folder.display())])
@@ -135,6 +135,7 @@ pub fn open_terminal(preference: &str, folder: &Path) -> AppResult<()> {
     }
     #[cfg(target_os = "macos")]
     {
+        let _ = preference;
         let script = format!(
             "tell application \"Terminal\" to do script \"cd {}\"",
             folder.display()
@@ -144,7 +145,7 @@ pub fn open_terminal(preference: &str, folder: &Path) -> AppResult<()> {
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
-        let _ = pref;
+        let _ = preference;
         Command::new("x-terminal-emulator")
             .current_dir(folder)
             .spawn()

@@ -123,7 +123,7 @@ export function ProjectDetail({ category, projectId }: { category: Category; pro
         <div className="section">
           <h2 className="h2">Commands</h2>
           {commands.map((c) => (
-            <div key={c.id} className="row" style={{ margin: "6px 0" }}>
+            <div key={c.id} className="list-row">
               <span>{c.name}</span>
               <button className="btn" type="button" onClick={() => {
                 const go = (confirmed?: boolean) => api.runCommand({ projectId, command: c.command, confirmed }).then((out) => {
@@ -146,14 +146,14 @@ export function ProjectDetail({ category, projectId }: { category: Category; pro
       {hasCap(category, "versions") ? (
         <div className="section">
           <h2 className="h2">Versions</h2>
-          {versions.map((v) => <div key={v.version} className="muted">{v.version} · {formatDate(v.releasedAt)} · {v.changelog}</div>)}
+          {versions.map((v) => <div key={v.version} className="list-row muted">{v.version} · {formatDate(v.releasedAt)} · {v.changelog}</div>)}
           <VersionEditor projectId={project.id} onDone={reload} />
         </div>
       ) : null}
       {hasCap(category, "topics") ? (
         <div className="section">
           <h2 className="h2">Topics</h2>
-          {topics.map((t) => <div key={t.id} className="row" style={{ margin: "6px 0" }}><span>{t.title}</span><span className="badge">{t.status}</span><span className="muted">{formatDuration(t.trackedSeconds)}</span></div>)}
+          {topics.map((t) => <div key={t.id} className="list-row"><span>{t.title}</span><span className="badge">{t.status}</span><span className="muted">{formatDuration(t.trackedSeconds)}</span></div>)}
           <TopicEditor projectId={project.id} onDone={reload} />
         </div>
       ) : null}
@@ -163,7 +163,7 @@ export function ProjectDetail({ category, projectId }: { category: Category; pro
           <p className="muted">Folder listings are cached. Refresh runs a shallow scan; deep indexing is a background job.</p>
           <button className="btn" type="button" onClick={() => api.scanProjectFolder(projectId).then((r) => setFolder(r as never))}>Refresh folder</button>
           {files.map((f) => (
-            <div key={f.id} className="row" style={{ margin: "6px 0" }}>
+            <div key={f.id} className="list-row">
               <span>{f.displayName}{f.indexStage ? ` · ${f.indexStage}` : ""}{f.indexStatus && f.indexStatus !== "completed" ? ` (${f.indexStatus})` : ""}</span>
               {f.indexLimitation ? <span className="muted">{f.indexLimitation}</span> : null}
               {f.absolutePath ? <button className="btn" type="button" onClick={() => void api.openPath(f.absolutePath!)}>Open</button> : null}
@@ -171,7 +171,7 @@ export function ProjectDetail({ category, projectId }: { category: Category; pro
             </div>
           ))}
           {folder.map((f) => (
-            <div key={f.path} className="row" style={{ margin: "4px 0" }}>
+            <div key={f.path} className="list-row">
               <span>{f.isDir ? "Folder" : "File"} · {f.name}</span>
               <button className="btn" type="button" onClick={() => void api.openPath(f.path)}>Open</button>
             </div>
@@ -188,7 +188,7 @@ export function ProjectDetail({ category, projectId }: { category: Category; pro
       {hasCap(category, "exams") ? (
         <div className="section">
           <h2 className="h2">Exams</h2>
-          {exams.map((e) => <div key={e.id} className="muted">{formatDate(e.date)} · {e.status} {e.grade != null ? `· ${e.grade}/30` : ""}</div>)}
+          {exams.map((e) => <div key={e.id} className="list-row muted">{formatDate(e.date)} · {e.status} {e.grade != null ? `· ${e.grade}/30` : ""}</div>)}
           <ExamEditor projectId={project.id} onDone={reload} />
         </div>
       ) : null}
@@ -196,7 +196,7 @@ export function ProjectDetail({ category, projectId }: { category: Category; pro
         <div className="section">
           <h2 className="h2">Attendance</h2>
           <p className="muted">Lessons are not time entries. Study time is tracked separately.</p>
-          {lessons.map((l) => <div key={l.id} className="muted">{l.date} · {l.attended ? "attended" : "missed"}</div>)}
+          {lessons.map((l) => <div key={l.id} className="list-row muted">{l.date} · {l.attended ? "attended" : "missed"}</div>)}
           <LessonEditor projectId={project.id} onDone={reload} />
         </div>
       ) : null}

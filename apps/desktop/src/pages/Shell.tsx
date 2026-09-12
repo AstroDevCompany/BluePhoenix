@@ -96,7 +96,7 @@ export function RootChrome() {
           current={currentCategory}
           onSelect={(id) => go({ name: "workspace", categoryId: id, page: "overview" })}
         />
-        <div className="sidebar-nav" key={currentCategory.id}>
+        <div className="sidebar-nav">
           <div className="muted" style={{ fontSize: 11, letterSpacing: "0.12em", marginTop: 12 }}>
             {currentCategory.name.toUpperCase()}
           </div>
@@ -121,9 +121,7 @@ export function RootChrome() {
         </div>
       </aside>
       <main className="main" id="main">
-        <div key={pathname} className="page-enter">
-          <Outlet />
-        </div>
+        <Outlet />
       </main>
       <AiChatPanel projectId={route.name === "workspace" ? route.projectId : undefined} />
       <AiSetupPopup />

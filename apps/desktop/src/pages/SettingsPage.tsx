@@ -46,7 +46,7 @@ export function SettingsPage({
           </button>
         ))}
       </div>
-      <div key={current} className="page-enter">
+      <div key={current}>
       {current === "appearance" ? (
         <section className="glass-panel settings-card">
           <label className="field"><span className="label">Theme</span>

@@ -58,8 +58,8 @@ pub fn list_tags(state: State<AppState>) -> AppResult<Vec<TagDto>> {
 }
 
 #[tauri::command]
-pub fn create_custom_tag(state: State<AppState>, name: String) -> AppResult<TagDto> {
-    state.db.with(|c| db::create_custom_tag(c, &name))
+pub fn create_custom_tag(state: State<AppState>, name: String, kind: Option<String>) -> AppResult<TagDto> {
+    state.db.with(|c| db::create_custom_tag(c, &name, kind.as_deref().unwrap_or("custom")))
 }
 
 #[tauri::command]
@@ -647,22 +647,28 @@ pub fn local_version() -> String {
     crate::updater::local_version()
 }
 
-#[tauri::command]
-pub fn pick_folder(app: AppHandle) -> AppResult<Option<String>> {
-    use tauri_plugin_dialog::DialogExt;
-    match app.dialog().file().blocking_pick_folder() {
-        Some(path) => Ok(path.into_path().ok().map(|p| p.to_string_lossy().into_owned())),
-        None => Ok(None),
-    }
+fn file_path_to_string(path: tauri_plugin_dialog::FilePath) -> Option<String> {
+    path.into_path().ok().map(|p| p.to_string_lossy().into_owned())
 }
 
 #[tauri::command]
-pub fn pick_file(app: AppHandle) -> AppResult<Option<String>> {
+pub async fn pick_folder(app: AppHandle) -> AppResult<Option<String>> {
     use tauri_plugin_dialog::DialogExt;
-    match app.dialog().file().blocking_pick_file() {
-        Some(path) => Ok(path.into_path().ok().map(|p| p.to_string_lossy().into_owned())),
-        None => Ok(None),
-    }
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog().file().set_title("Choose a folder").pick_folder(move |folder| {
+        let _ = tx.send(folder);
+    });
+    Ok(rx.await.ok().flatten().and_then(file_path_to_string))
+}
+
+#[tauri::command]
+pub async fn pick_file(app: AppHandle) -> AppResult<Option<String>> {
+    use tauri_plugin_dialog::DialogExt;
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog().file().set_title("Choose a file").pick_file(move |file| {
+        let _ = tx.send(file);
+    });
+    Ok(rx.await.ok().flatten().and_then(file_path_to_string))
 }
 
 #[tauri::command]

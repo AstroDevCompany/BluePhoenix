@@ -19,7 +19,7 @@ export function TodoList({
     <div>
       {todos.length === 0 ? <EmptyState title="No TODOs" body="Add a task for this item." /> : null}
       {todos.slice(0, 40).map((t) => (
-        <label key={t.id} className="row" style={{ margin: "4px 0" }}>
+        <label key={t.id} className="list-row">
           <input
             type="checkbox"
             checked={t.status === "completed"}
