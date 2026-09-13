@@ -1,5 +1,6 @@
-import type { PointerEvent } from "react";
-import { FolderOpen, Github, Globe, Play, Terminal, Code2 } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type PointerEvent } from "react";
+import { createPortal } from "react-dom";
+import { FolderOpen, Github, Globe, Play, Terminal, Code2, Trash2 } from "lucide-react";
 import type { Category, ProjectCard } from "../../lib/types";
 import { hasCap } from "../../lib/types";
 import { formatDuration } from "../../lib/format";
@@ -25,6 +26,28 @@ export function ProjectCardView({
   onOpen: () => void;
   onRefresh: () => void;
 }) {
+  const toast = useUi((s) => s.showToast);
+  const confirm = useUi((s) => s.askConfirm);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const noun = category.terminology.itemSingular.toLowerCase();
+
+  const askRemove = () => {
+    confirm(
+      `Remove ${noun}?`,
+      `"${project.name}" will be removed from ${category.name}. Files on disk are not deleted.`,
+      () => {
+        void api
+          .deleteProject(project.id)
+          .then(() => {
+            toast(`Removed ${project.name}`);
+            onRefresh();
+          })
+          .catch((e) => toast(formatError(e), "error"));
+      },
+      true,
+    );
+  };
+
   const Body =
     category.kind === "university"
       ? UniversityBody
@@ -35,6 +58,11 @@ export function ProjectCardView({
     <article
       className="project-card"
       onClick={onOpen}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setMenu({ x: e.clientX, y: e.clientY });
+      }}
       onKeyDown={(e) => e.key === "Enter" && onOpen()}
       onPointerMove={onCardSpot}
       role="button"
@@ -42,12 +70,101 @@ export function ProjectCardView({
     >
       <div className="row" style={{ justifyContent: "space-between" }}>
         <strong style={{ fontSize: 16 }}>{project.name}</strong>
-        <span className="badge">{project.status}</span>
+        <div className="row project-card-head" onClick={(e) => e.stopPropagation()}>
+          <span className="badge">{project.status}</span>
+          <IconButton
+            label={`Remove ${noun}`}
+            className="btn icon ghost"
+            onClick={askRemove}
+          >
+            <Trash2 size={14} />
+          </IconButton>
+        </div>
       </div>
       <div className="muted">{project.description || "No description"}</div>
       <Body project={project} category={category} onRefresh={onRefresh} />
       {hasCap(category, "achievements") ? <TrophyRow items={project.achievements} /> : null}
+      {menu ? (
+        <CardContextMenu
+          x={menu.x}
+          y={menu.y}
+          noun={noun}
+          onOpen={() => {
+            setMenu(null);
+            onOpen();
+          }}
+          onRemove={() => {
+            setMenu(null);
+            askRemove();
+          }}
+          onClose={() => setMenu(null)}
+        />
+      ) : null}
     </article>
+  );
+}
+
+function CardContextMenu({
+  x,
+  y,
+  noun,
+  onOpen,
+  onRemove,
+  onClose,
+}: {
+  x: number;
+  y: number;
+  noun: string;
+  onOpen: () => void;
+  onRemove: () => void;
+  onClose: () => void;
+}) {
+  const root = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ left: x, top: y });
+
+  useLayoutEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const pad = 8;
+    setPos({
+      left: Math.min(x, window.innerWidth - rect.width - pad),
+      top: Math.min(y, window.innerHeight - rect.height - pad),
+    });
+  }, [x, y]);
+
+  useEffect(() => {
+    const onDoc = (e: Event) => {
+      if (!root.current?.contains(e.target as Node)) onClose();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  return createPortal(
+    <div
+      ref={root}
+      className="menu-pop card-ctx glass-panel is-open"
+      role="menu"
+      style={{ left: pos.left, top: pos.top }}
+      onClick={(e: MouseEvent<HTMLDivElement>) => e.stopPropagation()}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      <button className="btn" type="button" role="menuitem" onClick={onOpen}>
+        Open
+      </button>
+      <button className="btn danger" type="button" role="menuitem" onClick={onRemove}>
+        <Trash2 size={14} /> Remove {noun}
+      </button>
+    </div>,
+    document.body,
   );
 }
 

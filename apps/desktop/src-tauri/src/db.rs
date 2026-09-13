@@ -1133,6 +1133,37 @@ pub fn update_project_fields(
     Ok(())
 }
 
+pub fn delete_project(conn: &Connection, id: &str, device_id: &str) -> AppResult<()> {
+    let (name, category_id): (String, String) = conn
+        .query_row(
+            "SELECT name, category_id FROM projects WHERE id=?1 AND deleted_at IS NULL",
+            [id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .optional()?
+        .ok_or_else(|| AppError::msg("This item was already removed"))?;
+    if let Ok(Some(running)) = running_timer(conn, device_id) {
+        if running.entry.project_id == id && running.is_local_device {
+            let _ = stop_timer(conn, device_id);
+        }
+    }
+    let ts = now();
+    conn.execute(
+        "UPDATE projects SET deleted_at=?1, updated_at=?1, revision=revision+1 WHERE id=?2",
+        params![ts, id],
+    )?;
+    conn.execute("DELETE FROM search_index WHERE entity_id = ?1", [id])?;
+    activity(
+        conn,
+        Some(id),
+        Some(&category_id),
+        "project.deleted",
+        json!({"name": name}),
+    )?;
+    queue_outbox(conn, "projects", id, "delete", json!({"id": id}))?;
+    Ok(())
+}
+
 pub fn update_binding(
     conn: &Connection,
     device_id: &str,

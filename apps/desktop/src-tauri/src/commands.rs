@@ -210,6 +210,13 @@ pub fn update_project(
 }
 
 #[tauri::command]
+pub fn delete_project(state: State<AppState>, id: String) -> AppResult<()> {
+    state
+        .db
+        .with(|c| db::delete_project(c, &id, &state.db.device_id))
+}
+
+#[tauri::command]
 pub fn running_timer(state: State<AppState>) -> AppResult<Option<RunningTimerDto>> {
     state.db.with(|c| db::running_timer(c, &state.db.device_id))
 }

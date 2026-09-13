@@ -37,6 +37,7 @@ export const api = {
   getProject: (id: string) => invoke<ProjectCard>("get_project", { id }),
   createProject: (input: Record<string, unknown>) => invoke<ProjectCard>("create_project", { input }),
   updateProject: (input: Record<string, unknown>) => invoke<ProjectCard>("update_project", { input }),
+  deleteProject: (id: string) => invoke("delete_project", { id }),
   runningTimer: () => invoke<RunningTimer | null>("running_timer"),
   startTimer: (projectId: string, topicId?: string) =>
     invoke("start_timer", { projectId, topicId }),

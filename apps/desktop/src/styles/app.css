@@ -632,8 +632,10 @@ body:not(.app-ready) .app-atmosphere {
 .list-row > .btn + .btn,
 .chip-row > .btn + .btn,
 .project-card > .btn + .btn,
+.project-card-head > .btn + .btn,
 .menu-pop > .btn + .btn,
-.more-menu-pop > .btn + .btn {
+.more-menu-pop > .btn + .btn,
+.card-ctx > .btn + .btn {
   margin-inline-start: 0;
 }
 
@@ -2141,6 +2143,27 @@ html[data-reduced-motion="true"]::view-transition-new(*) {
   width: 100%;
   margin-inline: 0;
   justify-content: flex-start;
+}
+
+.card-ctx {
+  position: fixed;
+  z-index: 30;
+  min-width: 188px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.card-ctx .btn {
+  width: 100%;
+  margin-inline: 0;
+  justify-content: flex-start;
+}
+
+.project-card-head {
+  flex-shrink: 0;
+  align-items: center;
 }
 
 .git-table {

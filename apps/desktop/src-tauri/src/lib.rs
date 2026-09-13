@@ -129,6 +129,7 @@ pub fn run() {
             commands::get_project,
             commands::create_project,
             commands::update_project,
+            commands::delete_project,
             commands::running_timer,
             commands::start_timer,
             commands::stop_timer,

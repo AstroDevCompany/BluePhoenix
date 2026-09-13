@@ -114,14 +114,6 @@ export function CreateProjectDialog({
             </button>
           ))}
         </div>
-        <label className="field">
-          <span className="label">{category?.terminology.itemSingular ?? "Name"}</span>
-          <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
-        </label>
-        <label className="field">
-          <span className="label">Description</span>
-          <textarea className="textarea" value={description} onChange={(e) => setDescription(e.target.value)} />
-        </label>
         <PathField
           label="Folder"
           value={localPath}
@@ -138,6 +130,14 @@ export function CreateProjectDialog({
             </button>
           ) : null}
         />
+        <label className="field">
+          <span className="label">{category?.terminology.itemSingular ?? "Name"}</span>
+          <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+        <label className="field">
+          <span className="label">Description</span>
+          <textarea className="textarea" value={description} onChange={(e) => setDescription(e.target.value)} />
+        </label>
         {fields === "software" ? (
           <>
             <label className="field">
