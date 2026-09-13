@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Category } from "../../lib/types";
 import { api } from "../../lib/ipc";
-import { formatDate } from "../../lib/format";
+import { formatDate, formatExamStatus } from "../../lib/format";
 import { EmptyState } from "../../components/ui/EmptyState";
 
 export function ExamsPage({ category }: { category: Category }) {
@@ -17,7 +17,7 @@ export function ExamsPage({ category }: { category: Category }) {
       ) : (
         exams.map((e) => (
           <div key={e.id} className="list-row muted">
-            {e.projectName} · {formatDate(e.date)} · {e.status} {e.grade != null ? `· ${e.grade}/30` : ""}
+            {e.projectName} · {formatDate(e.date)} · {formatExamStatus(e.status)} {e.grade != null ? `· ${e.grade}/30` : ""}
           </div>
         ))
       )}

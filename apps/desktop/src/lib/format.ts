@@ -16,3 +16,21 @@ export function formatDate(value?: string | null) {
 export function achievementSrc(icon: string) {
   return `/assets/achievements/${icon}`;
 }
+
+const EXAM_STATUS_LABELS: Record<string, string> = {
+  scheduled: "Scheduled",
+  attempted: "Attempted",
+  passed: "Passed",
+  failed: "Failed",
+  withdrawn: "Withdrawn",
+  no_show: "No show",
+};
+
+export const EXAM_STATUS_OPTIONS = Object.entries(EXAM_STATUS_LABELS).map(([value, label]) => ({
+  value,
+  label,
+}));
+
+export function formatExamStatus(status: string) {
+  return EXAM_STATUS_LABELS[status] ?? status.replaceAll("_", " ").replace(/^\w/, (c) => c.toUpperCase());
+}

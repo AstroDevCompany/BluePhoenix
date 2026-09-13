@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { Category, CommandOutput, ProjectCard, Todo } from "../../lib/types";
 import { hasCap } from "../../lib/types";
 import { api, formatError } from "../../lib/ipc";
-import { formatDate, formatDuration } from "../../lib/format";
+import { formatDate, formatDuration, formatExamStatus, EXAM_STATUS_OPTIONS } from "../../lib/format";
 import { TrophyRow } from "../achievements/TrophyRow";
 import { useUi } from "../../stores/ui";
 import { TimerControls } from "../time/TimerControls";
@@ -188,7 +188,7 @@ export function ProjectDetail({ category, projectId }: { category: Category; pro
       {hasCap(category, "exams") ? (
         <div className="section">
           <h2 className="h2">Exams</h2>
-          {exams.map((e) => <div key={e.id} className="list-row muted">{formatDate(e.date)} · {e.status} {e.grade != null ? `· ${e.grade}/30` : ""}</div>)}
+          {exams.map((e) => <div key={e.id} className="list-row muted">{formatDate(e.date)} · {formatExamStatus(e.status)} {e.grade != null ? `· ${e.grade}/30` : ""}</div>)}
           <ExamEditor projectId={project.id} onDone={reload} />
         </div>
       ) : null}
@@ -268,7 +268,7 @@ function ExamEditor({ projectId, onDone }: { projectId: string; onDone: () => vo
       <Select
         value={status}
         onChange={setStatus}
-        options={["scheduled", "attempted", "passed", "failed", "withdrawn", "no_show"].map((s) => ({ value: s, label: s }))}
+        options={EXAM_STATUS_OPTIONS}
       />
       <input className="input" placeholder="Grade" value={grade} onChange={(e) => setGrade(e.target.value)} />
       <button className="btn" type="button" onClick={() => api.upsertExam({ id: "", projectId, projectName: "", date, grade: grade ? Number(grade) : null, status, notes: null }).then(onDone)}>Save attempt</button>
