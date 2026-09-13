@@ -113,7 +113,7 @@ export function RootChrome() {
         <div style={{ flex: 1 }} />
         <button className="nav-btn" type="button" onClick={() => go({ name: "achievements" })}><Award size={15} /> Achievements</button>
         <button className="nav-btn" type="button" onClick={() => go({ name: "settings", tab: "appearance" })}><SettingsIcon size={15} /> Settings</button>
-        <div className="row muted" style={{ fontSize: 11, marginTop: 8 }}>
+        <div className="sidebar-sync muted">
           <span className={`sync-dot ${bootstrap.sync.status === "sync_error" ? "error" : bootstrap.sync.pending ? "pending" : ""}`} />
           {bootstrap.sync.label}
         </div>

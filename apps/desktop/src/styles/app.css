@@ -1191,6 +1191,16 @@ body:not(.app-ready) .app-atmosphere {
 .sync-dot.error { background: var(--danger); }
 .sync-dot.pending { background: var(--warning); }
 
+.sidebar-sync {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  margin-top: var(--space-2);
+  padding: 0 var(--space-3);
+  font-size: 11px;
+}
+
 .workspace-switch {
   position: relative;
   isolation: isolate;
