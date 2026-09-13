@@ -3,11 +3,11 @@ import type { Category, ProjectCard } from "../../lib/types";
 import { api } from "../../lib/ipc";
 import { EmptyState } from "../../components/ui/EmptyState";
 
-export function CommandsPage({ category }: { category: Category }) {
+export function CommandsPage({ category, refreshKey = 0 }: { category: Category; refreshKey?: number }) {
   const [projects, setProjects] = useState<ProjectCard[]>([]);
   useEffect(() => {
     void api.listProjects(category.id).then(setProjects);
-  }, [category.id]);
+  }, [category.id, refreshKey]);
   const pinned = projects.filter((p) => p.pinnedCommand);
   return (
     <div>

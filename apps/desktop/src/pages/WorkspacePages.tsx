@@ -29,9 +29,9 @@ export function WorkspaceHome({
 }) {
   const openCreate = useUi((s) => s.openCreate);
   if (projectId) return <ProjectDetail category={category} projectId={projectId} />;
-  if (page === "todos") return <TodosPage category={category} />;
-  if (page === "commands") return <CommandsPage category={category} />;
-  if (page === "exams") return <ExamsPage category={category} />;
+  if (page === "todos") return <TodosPage category={category} refreshKey={refreshKey} />;
+  if (page === "commands") return <CommandsPage category={category} refreshKey={refreshKey} />;
+  if (page === "exams") return <ExamsPage category={category} refreshKey={refreshKey} />;
   if (page === "items") return <ItemsPage category={category} onOpen={onOpenProject} onCreate={openCreate} refreshKey={refreshKey} />;
   return <Overview category={category} onOpen={onOpenProject} onCreate={openCreate} refreshKey={refreshKey} />;
 }

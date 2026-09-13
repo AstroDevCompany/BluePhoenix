@@ -4,11 +4,11 @@ import { api } from "../../lib/ipc";
 import { formatDate, formatExamStatus } from "../../lib/format";
 import { EmptyState } from "../../components/ui/EmptyState";
 
-export function ExamsPage({ category }: { category: Category }) {
+export function ExamsPage({ category, refreshKey = 0 }: { category: Category; refreshKey?: number }) {
   const [exams, setExams] = useState<{ id: string; projectName: string; date?: string; status: string; grade?: number }[]>([]);
   useEffect(() => {
     void api.listExams({ categoryId: category.id }).then((r) => setExams(r as never));
-  }, [category.id]);
+  }, [category.id, refreshKey]);
   return (
     <div>
       <h1 className="h1">Exams</h1>

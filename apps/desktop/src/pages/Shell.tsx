@@ -1,4 +1,4 @@
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext } from "react";
 import { Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   Award,
@@ -15,10 +15,11 @@ import { Titlebar } from "../components/Titlebar";
 import { CommandPalette } from "../components/CommandPalette";
 import { WorkspaceSwitcher } from "../components/WorkspaceSwitcher";
 import { Onboarding } from "./Onboarding";
-import { parsePath, pathFor, type Route, type WorkspacePage } from "../components/router";
+import { fabIntentFor, fabLabelFor, parsePath, pathFor, type Route, type WorkspacePage } from "../components/router";
 import { useUi } from "../stores/ui";
 import { LiveTimerBadge } from "../features/time/TimerControls";
 import { CreateProjectDialog } from "../features/projects/CreateProjectDialog";
+import { TabCreateDialog } from "../components/TabCreateDialog";
 import { AiChatPanel } from "../features/ai/AiChatPanel";
 import { AiSetupPopup } from "../features/ai/AiSetupPopup";
 
@@ -48,7 +49,6 @@ export function RootChrome() {
   const toast = useUi((s) => s.toast);
   const confirm = useUi((s) => s.confirm);
   const closeConfirm = useUi((s) => s.closeConfirm);
-  const [creating, setCreating] = useState(false);
   const createOpen = useUi((s) => s.createOpen);
   const closeCreate = useUi((s) => s.closeCreate);
   const openCreate = useUi((s) => s.openCreate);
@@ -84,6 +84,8 @@ export function RootChrome() {
   if (!currentCategory) {
     return <div className="main">Enable a workspace in Settings.</div>;
   }
+
+  const intent = fabIntentFor(route);
 
   return (
     <div className={`shell ${aiPanelOpen ? "ai-open" : ""}`}>
@@ -123,19 +125,31 @@ export function RootChrome() {
       </main>
       <AiChatPanel projectId={route.name === "workspace" ? route.projectId : undefined} />
       <AiSetupPopup />
-      <button className="btn primary fab-new" type="button" onClick={openCreate}>
-        <Plus size={16} /> New
-      </button>
-      {creating || createOpen ? (
+      {intent ? (
+        <button className="btn primary fab-new" type="button" onClick={openCreate}>
+          <Plus size={16} /> {fabLabelFor(intent, currentCategory.terminology.itemSingular)}
+        </button>
+      ) : null}
+      {createOpen && intent === "project" ? (
         <CreateProjectDialog
           bootstrap={bootstrap}
           initialCategory={currentCategory.id}
-          onClose={() => { setCreating(false); closeCreate(); }}
+          onClose={closeCreate}
           onCreated={(id, categoryId) => {
-            setCreating(false);
             closeCreate();
             bump();
             go({ name: "workspace", categoryId, page: "items", projectId: id });
+          }}
+        />
+      ) : null}
+      {createOpen && intent && intent !== "project" ? (
+        <TabCreateDialog
+          kind={intent}
+          category={currentCategory}
+          onClose={closeCreate}
+          onCreated={() => {
+            closeCreate();
+            bump();
           }}
         />
       ) : null}

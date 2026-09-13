@@ -4,11 +4,11 @@ import { api } from "../../lib/ipc";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { VirtualList } from "../../components/ui/VirtualList";
 
-export function TodosPage({ category }: { category: Category }) {
+export function TodosPage({ category, refreshKey = 0 }: { category: Category; refreshKey?: number }) {
   const [todos, setTodos] = useState<Todo[]>([]);
   useEffect(() => {
     void api.listTodos({ categoryId: category.id }).then(setTodos);
-  }, [category.id]);
+  }, [category.id, refreshKey]);
   return (
     <div>
       <h1 className="h1">TODOs</h1>

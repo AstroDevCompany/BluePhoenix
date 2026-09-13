@@ -28,3 +28,20 @@ export function parsePath(pathname: string, fallbackCategory: string): Route {
   }
   return { name: "workspace", categoryId: fallbackCategory, page: "overview" };
 }
+
+export type FabIntent = "project" | "todo" | "exam" | "command";
+
+export function fabIntentFor(route: Route): FabIntent | null {
+  if (route.name !== "workspace") return null;
+  if (route.page === "todos") return "todo";
+  if (route.page === "exams") return "exam";
+  if (route.page === "commands") return "command";
+  return "project";
+}
+
+export function fabLabelFor(intent: FabIntent, itemSingular: string) {
+  if (intent === "todo") return "New TODO";
+  if (intent === "exam") return "New exam";
+  if (intent === "command") return "New command";
+  return `New ${itemSingular}`;
+}
