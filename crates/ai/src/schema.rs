@@ -118,13 +118,23 @@ pub fn parse_software_folder_draft(text: &str) -> Option<SoftwareFolderDraft> {
     let value = extract_json_object(text)?;
     let obj = value.as_object()?;
     Some(SoftwareFolderDraft {
-        name: json_string(obj, &["name"]),
-        description: json_string(obj, &["description"]),
+        name: json_string(obj, &["name", "title"]),
+        description: json_string(obj, &["description", "summary", "about"]),
         github_url: json_string(obj, &["githubUrl", "github_url"]),
         website_url: json_string(obj, &["websiteUrl", "website_url"]),
         languages: json_string_list(obj, &["languages"]),
         frameworks: json_string_list(obj, &["frameworks"]),
     })
+}
+
+pub fn requested_inspect_files(text: &str) -> Vec<String> {
+    let Some(value) = extract_json_object(text) else {
+        return Vec::new();
+    };
+    let Some(obj) = value.as_object() else {
+        return Vec::new();
+    };
+    json_string_list(obj, &["needFiles", "need_files", "readFiles"])
 }
 
 fn json_string(obj: &serde_json::Map<String, Value>, keys: &[&str]) -> String {
@@ -186,5 +196,15 @@ mod tests {
         assert!(draft.description.is_empty());
         assert_eq!(draft.github_url, "https://github.com/org/app");
         assert_eq!(draft.languages, vec!["TypeScript"]);
+        let titled = parse_software_folder_draft(
+            "{\"title\":\"BluePhoenix\",\"summary\":\"A local command center.\",\"needFiles\":[\"src/lib.rs\"]}",
+        )
+        .unwrap();
+        assert_eq!(titled.name, "BluePhoenix");
+        assert_eq!(titled.description, "A local command center.");
+        assert_eq!(
+            requested_inspect_files("{\"needFiles\":[\"src/lib.rs\",\"../etc/passwd\"]}"),
+            vec!["src/lib.rs", "../etc/passwd"]
+        );
     }
 }

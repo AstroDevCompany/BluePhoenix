@@ -136,11 +136,12 @@ pub fn commit_prompt(diff: &str, log: &str, follow_style: bool) -> String {
 
 pub fn inspect_software_folder_prompt(evidence: &str, languages: &str, frameworks: &str) -> String {
     format!(
-        "Extract software project metadata from the excerpts. Return JSON only: {{\"name\":\"\",\"description\":\"\",\"githubUrl\":\"\",\"websiteUrl\":\"\",\"languages\":[],\"frameworks\":[]}}.\n\
-Use only the provided excerpts. Leave a field empty if it is not in the sources. Do not invent names, URLs, or marketing copy. Description must be a short condensation of README or manifest text, not new prose. languages and frameworks must be chosen only from the allowed lists.\n\
+        "Read the folder tree and file excerpts, then fill software project metadata. Return JSON only: {{\"name\":\"\",\"description\":\"\",\"githubUrl\":\"\",\"websiteUrl\":\"\",\"languages\":[],\"frameworks\":[],\"needFiles\":[]}}.\n\
+Reason from the files: prefer a README title or human product name over a package slug. Write a 1-2 sentence description of what the project does, grounded in README, manifests, and source comments. Do not leave name or description empty if the files explain the project. Do not invent URLs or facts that are not supported by the files. Never write or modify files.\n\
+If a listed relative path would materially improve name/description and was not excerpted, put it in needFiles (max 6). languages and frameworks must be chosen only from the allowed lists.\n\
 Allowed languages: {languages}\n\
 Allowed frameworks: {frameworks}\n\
-Excerpts:\n{evidence}"
+Files:\n{evidence}"
     )
 }
 
@@ -231,8 +232,8 @@ mod tests {
             "Rust, TypeScript",
             "React",
         );
-        assert!(prompt.contains("Do not invent"));
-        assert!(prompt.contains("Use only the provided excerpts"));
+        assert!(prompt.contains("Do not invent URLs"));
+        assert!(prompt.contains("human product name"));
         assert!(prompt.contains("Allowed languages: Rust, TypeScript"));
         assert!(prompt.contains("hello"));
     }

@@ -8,8 +8,9 @@ use bluephoenix_ai::prompts;
 use bluephoenix_ai::settings::AiSettings;
 use bluephoenix_ai::{
     complete_with_fallback, parse_agent_prompt, parse_changelog, parse_commit, parse_prioritize,
-    parse_search, parse_software_folder_draft, parse_todos, require_ready, stream_with_fallback,
-    ChatMessage, CompletionRequest, OpenRouterProvider, OPENROUTER_SECRET_KIND,
+    parse_search, parse_software_folder_draft, parse_todos, requested_inspect_files, require_ready,
+    stream_with_fallback, ChatMessage, CompletionRequest, OpenRouterProvider,
+    OPENROUTER_SECRET_KIND,
 };
 use bluephoenix_domain::ids::CategoryKind;
 use serde::Deserialize;
@@ -623,7 +624,7 @@ pub async fn ai_inspect_software_folder(
     let (git_path, tags) = state
         .db
         .with(|c| Ok((db::load_settings(c).git_path, db::list_tags(c)?)))?;
-    let facts = crate::project_facts::collect(&path, &git_path)?;
+    let mut facts = crate::project_facts::collect(&path, &git_path)?;
     let languages: Vec<String> = tags
         .iter()
         .filter(|t| t.kind == "language")
@@ -634,29 +635,37 @@ pub async fn ai_inspect_software_folder(
         .filter(|t| t.kind == "framework")
         .map(|t| t.name.clone())
         .collect();
-    let outcome = complete_text(
-        &state,
+    let inspect_messages = |evidence: &str| {
         vec![
             ChatMessage {
                 role: "system".into(),
-                content:
-                    "Return JSON only. Extract from excerpts. Never invent. Never write files."
-                        .into(),
+                content: "You inspect a local software folder. Read the tree and excerpts, then infer a human project title and a grounded 1-2 sentence description. Return JSON only. Never write or modify files. Never invent URLs.".into(),
             },
             ChatMessage {
                 role: "user".into(),
                 content: prompts::inspect_software_folder_prompt(
-                    &facts.evidence,
+                    evidence,
                     &languages.join(", "),
                     &frameworks.join(", "),
                 ),
             },
-        ],
-        true,
-    )
-    .await?;
-    let parsed = parse_software_folder_draft(&outcome.response.text)
+        ]
+    };
+    let mut outcome = complete_text(&state, inspect_messages(&facts.evidence), true).await?;
+    let mut parsed = parse_software_folder_draft(&outcome.response.text)
         .ok_or_else(|| AppError::msg("Model returned invalid JSON"))?;
+    let needed = requested_inspect_files(&outcome.response.text);
+    if (parsed.name.trim().is_empty() || parsed.description.trim().is_empty()) && !needed.is_empty()
+    {
+        let extra = crate::project_facts::read_extra_files(&path, &needed);
+        if !extra.trim().is_empty() {
+            facts.evidence.push_str(&extra);
+            outcome = complete_text(&state, inspect_messages(&facts.evidence), true).await?;
+            if let Some(again) = parse_software_folder_draft(&outcome.response.text) {
+                parsed = again;
+            }
+        }
+    }
     let merged = crate::project_facts::merge_draft(
         &facts,
         crate::project_facts::SoftwareFolderDraft {

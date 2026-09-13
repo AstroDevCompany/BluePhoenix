@@ -5,8 +5,12 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
-const README_LIMIT: usize = 8_192;
-const MANIFEST_LIMIT: usize = 4_096;
+const EXCERPT_BUDGET: usize = 28_000;
+const FILE_EXCERPT_CAP: usize = 3_500;
+const EXTRA_FILE_CAP: usize = 3_000;
+const MAX_TREE_PATHS: usize = 180;
+const MAX_WALK_DEPTH: usize = 5;
+const MAX_EXTRA_FILES: usize = 6;
 
 const MANIFESTS: &[&str] = &[
     "package.json",
@@ -15,6 +19,43 @@ const MANIFESTS: &[&str] = &[
     "go.mod",
     "composer.json",
     "pubspec.yaml",
+];
+
+const SKIP_DIRS: &[&str] = &[
+    ".git",
+    "node_modules",
+    "target",
+    "dist",
+    "build",
+    ".next",
+    "vendor",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "Pods",
+    "coverage",
+    ".turbo",
+    "out",
+    "bin",
+    "obj",
+    ".cache",
+];
+
+const SKIP_NAMES: &[&str] = &[
+    "package-lock.json",
+    "yarn.lock",
+    "pnpm-lock.yaml",
+    "Cargo.lock",
+    "bun.lock",
+    "bun.lockb",
+    "composer.lock",
+    "poetry.lock",
+];
+
+const SKIP_EXTS: &[&str] = &[
+    "png", "jpg", "jpeg", "gif", "webp", "ico", "bmp", "pdf", "zip", "gz", "tgz", "wasm", "so",
+    "dylib", "dll", "exe", "bin", "woff", "woff2", "ttf", "eot", "mp4", "mp3", "mov", "wav", "map",
+    "lock",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -50,18 +91,28 @@ pub fn collect(path: &Path, git_bin: &str) -> AppResult<ProjectFacts> {
         .unwrap_or_default();
     let listing = native::list_dir_shallow(&root)?;
     let file_names: Vec<String> = listing.iter().map(|e| e.name.clone()).collect();
+    let tree = walk_rel_files(&root);
 
-    let mut excerpts = Vec::new();
     let mut parsed = StructuredFields::default();
+    let mut excerpts = Vec::new();
+    let mut used = 0usize;
 
-    if let Some((name, body)) = read_readme(&root, &file_names) {
-        excerpts.push(format!("{name}:\n{body}"));
-    }
-    for manifest in MANIFESTS {
-        if let Some(body) = read_under(&root, &file_names, manifest, MANIFEST_LIMIT) {
-            merge_structured(&mut parsed, manifest, &body);
-            excerpts.push(format!("{manifest}:\n{body}"));
+    for rel in ranked_excerpt_paths(&tree) {
+        if used >= EXCERPT_BUDGET {
+            break;
         }
+        let cap = FILE_EXCERPT_CAP.min(EXCERPT_BUDGET - used);
+        let Some(body) = read_rel(&root, &rel, cap) else {
+            continue;
+        };
+        if let Some(file_name) = rel.rsplit('/').next() {
+            if MANIFESTS.iter().any(|m| m.eq_ignore_ascii_case(file_name)) {
+                merge_structured(&mut parsed, file_name, &body);
+            }
+        }
+        let block = format!("{rel}:\n{body}");
+        used += block.len();
+        excerpts.push(block);
     }
 
     let remote = git::origin_url(git_bin, &root);
@@ -74,15 +125,21 @@ pub fn collect(path: &Path, git_bin: &str) -> AppResult<ProjectFacts> {
 
     let mut evidence = String::new();
     evidence.push_str(&format!("Folder: {folder_name}\n"));
-    evidence.push_str(&format!("Files: {}\n", file_names.join(", ")));
+    evidence.push_str("Tree:\n");
+    for rel in tree.iter().take(MAX_TREE_PATHS) {
+        evidence.push_str(rel);
+        evidence.push('\n');
+    }
+    if tree.len() > MAX_TREE_PATHS {
+        evidence.push_str(&format!(
+            "… {} more files omitted\n",
+            tree.len() - MAX_TREE_PATHS
+        ));
+    }
     for block in &excerpts {
         evidence.push('\n');
         evidence.push_str(block);
         evidence.push('\n');
-    }
-
-    if parsed.name.is_none() && !folder_name.is_empty() {
-        parsed.name = Some(folder_name.clone());
     }
 
     Ok(ProjectFacts {
@@ -98,10 +155,15 @@ pub fn collect(path: &Path, git_bin: &str) -> AppResult<ProjectFacts> {
 
 pub fn merge_draft(facts: &ProjectFacts, model: SoftwareFolderDraft) -> SoftwareFolderDraft {
     SoftwareFolderDraft {
-        name: prefer_nonempty(facts.name.clone(), model.name)
-            .unwrap_or_else(|| facts.folder_name.clone()),
-        description: prefer_nonempty(facts.description.clone(), model.description)
-            .unwrap_or_default(),
+        name: first_nonempty([
+            &model.name,
+            &facts.name.clone().unwrap_or_default(),
+            &facts.folder_name,
+        ]),
+        description: first_nonempty([
+            &model.description,
+            &facts.description.clone().unwrap_or_default(),
+        ]),
         github_url: prefer_nonempty(
             facts.github_url.clone(),
             evidence_url(&model.github_url, &facts.evidence).unwrap_or_default(),
@@ -115,6 +177,29 @@ pub fn merge_draft(facts: &ProjectFacts, model: SoftwareFolderDraft) -> Software
         languages: model.languages,
         frameworks: model.frameworks,
     }
+}
+
+/// Read extra relative paths the model asked for. Stay inside `root`, read-only.
+pub fn read_extra_files(root: &Path, rels: &[String]) -> String {
+    let Ok(root) = root.canonicalize() else {
+        return String::new();
+    };
+    let mut out = String::new();
+    let mut used = 0usize;
+    for rel in rels.iter().take(MAX_EXTRA_FILES) {
+        if used >= EXCERPT_BUDGET / 2 {
+            break;
+        }
+        let cap = EXTRA_FILE_CAP.min(EXCERPT_BUDGET / 2 - used);
+        let Some(body) = read_rel(&root, rel, cap) else {
+            continue;
+        };
+        let block = format!("{rel}:\n{body}\n");
+        used += block.len();
+        out.push('\n');
+        out.push_str(&block);
+    }
+    out
 }
 
 pub fn url_supported_by_evidence(url: &str, evidence: &str) -> bool {
@@ -150,6 +235,16 @@ fn evidence_url(url: &str, evidence: &str) -> Option<String> {
         return None;
     }
     url_supported_by_evidence(url, evidence).then(|| url.to_string())
+}
+
+fn first_nonempty<const N: usize>(values: [&str; N]) -> String {
+    for value in values {
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+    String::new()
 }
 
 fn prefer_nonempty(structured: Option<String>, model: String) -> Option<String> {
@@ -350,25 +445,158 @@ fn looks_like_url(value: &str) -> bool {
     value.starts_with("http://") || value.starts_with("https://")
 }
 
-fn read_readme(root: &Path, names: &[String]) -> Option<(String, String)> {
-    let name = names.iter().find(|n| {
-        let lower = n.to_lowercase();
-        lower == "readme" || lower.starts_with("readme.")
-    })?;
-    let body = read_under(root, names, name, README_LIMIT)?;
-    Some((name.clone(), body))
+fn walk_rel_files(root: &Path) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut stack = vec![(root.to_path_buf(), 0usize)];
+    while let Some((dir, depth)) = stack.pop() {
+        if depth > MAX_WALK_DEPTH || out.len() >= MAX_TREE_PATHS {
+            continue;
+        }
+        let Ok(entries) = fs::read_dir(&dir) else {
+            continue;
+        };
+        let mut dirs = Vec::new();
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if name.starts_with('.') {
+                continue;
+            }
+            let path = entry.path();
+            let Ok(meta) = entry.metadata() else {
+                continue;
+            };
+            if meta.is_dir() {
+                if skip_dir_name(&name) {
+                    continue;
+                }
+                dirs.push(path);
+                continue;
+            }
+            if !meta.is_file() || skip_file_name(&name) {
+                continue;
+            }
+            let Ok(canon) = path.canonicalize() else {
+                continue;
+            };
+            if !is_within(root, &canon) {
+                continue;
+            }
+            if let Ok(rel) = canon.strip_prefix(root) {
+                out.push(rel.to_string_lossy().replace('\\', "/"));
+            }
+            if out.len() >= MAX_TREE_PATHS {
+                break;
+            }
+        }
+        if out.len() >= MAX_TREE_PATHS {
+            break;
+        }
+        for path in dirs.into_iter().rev() {
+            stack.push((path, depth + 1));
+        }
+    }
+    out.sort();
+    out
 }
 
-fn read_under(root: &Path, names: &[String], wanted: &str, max: usize) -> Option<String> {
-    let actual = names.iter().find(|n| n.eq_ignore_ascii_case(wanted))?;
-    let candidate = root.join(actual);
-    let canon = candidate.canonicalize().ok()?;
-    if !is_within(root, &canon) || !canon.is_file() {
+fn ranked_excerpt_paths(tree: &[String]) -> Vec<String> {
+    let mut ranked: Vec<(i32, String)> = tree
+        .iter()
+        .cloned()
+        .map(|rel| (excerpt_score(&rel), rel))
+        .filter(|(score, _)| *score > 0)
+        .collect();
+    ranked.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+    ranked.into_iter().map(|(_, rel)| rel).collect()
+}
+
+fn excerpt_score(rel: &str) -> i32 {
+    let depth = rel.bytes().filter(|b| *b == b'/').count() as i32;
+    let name = rel.rsplit('/').next().unwrap_or(rel).to_ascii_lowercase();
+    let lower = rel.to_ascii_lowercase();
+    let mut score = 0;
+    if name.starts_with("readme") {
+        score = 120;
+    } else if MANIFESTS.iter().any(|m| name.eq_ignore_ascii_case(m)) {
+        score = 110;
+    } else if name == "about.md" || name == "description.md" || name == "intro.md" {
+        score = 95;
+    } else if matches!(
+        name.as_str(),
+        "app.tsx"
+            | "app.vue"
+            | "main.rs"
+            | "lib.rs"
+            | "main.py"
+            | "app.py"
+            | "index.ts"
+            | "index.tsx"
+            | "index.js"
+            | "main.go"
+            | "main.swift"
+    ) {
+        score = 80;
+    } else if lower.ends_with("src/main.rs")
+        || lower.ends_with("src/lib.rs")
+        || lower.ends_with("src/index.ts")
+        || lower.ends_with("src/index.tsx")
+        || lower.ends_with("src/app.tsx")
+        || lower.ends_with("src/main.py")
+        || lower.ends_with("cmd/main.go")
+    {
+        score = 85;
+    } else if name.ends_with(".md") && depth <= 1 {
+        score = 60;
+    } else if name.ends_with(".md") && depth <= 2 {
+        score = 40;
+    }
+    if score == 0 {
+        return 0;
+    }
+    score - depth * 4
+}
+
+fn skip_dir_name(name: &str) -> bool {
+    SKIP_DIRS.iter().any(|d| name.eq_ignore_ascii_case(d))
+}
+
+fn skip_file_name(name: &str) -> bool {
+    if SKIP_NAMES.iter().any(|n| name.eq_ignore_ascii_case(n)) {
+        return true;
+    }
+    let ext = name.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
+    name.contains('.') && SKIP_EXTS.contains(&ext.as_str())
+}
+
+fn read_rel(root: &Path, rel: &str, max: usize) -> Option<String> {
+    let canon = resolve_inside(root, rel)?;
+    if !canon.is_file() {
         return None;
     }
     let bytes = fs::read(&canon).ok()?;
+    if bytes.contains(&0) {
+        return None;
+    }
     let text = String::from_utf8_lossy(&bytes).into_owned();
     Some(cap_bytes(text, max))
+}
+
+fn resolve_inside(root: &Path, rel: &str) -> Option<std::path::PathBuf> {
+    let rel = rel.trim().replace('\\', "/");
+    if rel.is_empty() || rel.contains('\0') {
+        return None;
+    }
+    let path = Path::new(&rel);
+    if path.is_absolute()
+        || path
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir))
+    {
+        return None;
+    }
+    let joined = root.join(path);
+    let canon = joined.canonicalize().ok()?;
+    is_within(root, &canon).then_some(canon)
 }
 
 fn is_within(root: &Path, candidate: &Path) -> bool {
@@ -410,32 +638,43 @@ mod tests {
             Some("https://github.com/org/demo")
         );
         assert!(facts.evidence.contains("The best demo"));
+        fs::create_dir_all(dir.join("src")).unwrap();
+        fs::write(
+            dir.join("src").join("lib.rs"),
+            "//! Nested identity crate.\n",
+        )
+        .unwrap();
+        let nested = collect(&dir, "").unwrap();
+        assert!(nested.evidence.contains("src/lib.rs"));
+        assert!(nested.evidence.contains("Nested identity crate"));
+        assert!(read_extra_files(&dir, &["src/lib.rs".into()]).contains("Nested identity crate"));
+        assert!(read_extra_files(&dir, &["../etc/passwd".into(), "/etc/passwd".into()]).is_empty());
         assert!(dir.exists());
         fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
-    fn merge_drops_invented_urls_and_prefers_structured() {
+    fn merge_keeps_model_title_and_drops_invented_urls() {
         let facts = ProjectFacts {
             folder_name: "demo".into(),
             file_names: vec!["README.md".into()],
             evidence: "Folder: demo\nhttps://github.com/org/demo\n".into(),
-            name: Some("demo".into()),
+            name: Some("demo-app".into()),
             description: Some("from package".into()),
             github_url: Some("https://github.com/org/demo".into()),
             website_url: None,
         };
         let model = SoftwareFolderDraft {
-            name: "hallucinated".into(),
-            description: "invented blurb".into(),
+            name: "Demo App".into(),
+            description: "A tool that helps you ship.".into(),
             github_url: "https://evil.example".into(),
             website_url: "https://also-evil.example".into(),
             languages: vec!["TypeScript".into()],
             frameworks: vec![],
         };
         let merged = merge_draft(&facts, model);
-        assert_eq!(merged.name, "demo");
-        assert_eq!(merged.description, "from package");
+        assert_eq!(merged.name, "Demo App");
+        assert_eq!(merged.description, "A tool that helps you ship.");
         assert_eq!(merged.github_url, "https://github.com/org/demo");
         assert!(merged.website_url.is_empty());
         assert_eq!(merged.languages, vec!["TypeScript"]);
