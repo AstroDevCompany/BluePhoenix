@@ -1,5 +1,6 @@
 use crate::error::{AiError, AiFailureKind, AiResult, AttemptRecord};
 use crate::provider::{AiProvider, CompletionRequest, CompletionResponse};
+use crate::settings::MAX_MODEL_SLOTS;
 
 #[derive(Debug)]
 pub struct FallbackOutcome {
@@ -17,7 +18,7 @@ pub async fn complete_with_fallback<P: AiProvider>(
         return Err(AiError::NoModels);
     }
     let mut attempts = Vec::new();
-    for (index, model) in models.iter().take(4).enumerate() {
+    for (index, model) in models.iter().take(MAX_MODEL_SLOTS).enumerate() {
         request.model = model.clone();
         match provider.complete(request.clone()).await {
             Ok(response) => {
@@ -168,7 +169,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn eight_configured_still_tries_four() {
+    async fn extra_configured_still_tries_four() {
         let p = Scripted {
             results: Mutex::new(vec![
                 Err(err(AiFailureKind::Unavailable)),

@@ -141,7 +141,7 @@ fn seed_settings(conn: &Connection) -> AppResult<()> {
         ("onboarding.complete", "false"),
         ("ai.reserved", "{}"),
         ("ai.enabled", "true"),
-        ("ai.models", "[\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\"]"),
+        ("ai.models", "[\"\",\"\",\"\",\"\"]"),
         ("ai.commitFollowStyle", "true"),
         ("ai.setupDismissed", "false"),
     ];

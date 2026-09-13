@@ -111,10 +111,10 @@ export function AiSettingsPanel() {
       {status.signedIn ? <p className="muted">Signed in: the key can sync as ciphertext only.</p> : <p className="muted">Local-only until you sign in. The wrap key never leaves this device.</p>}
       <div className="divider-block">
       <h2 className="h2">Models</h2>
-      <p className="muted">Up to 8 OpenRouter identifiers such as <code>provider/model-name:free</code>. Only the first four non-empty slots are tried as fallback.</p>
+      <p className="muted">Up to 4 OpenRouter identifiers such as <code>provider/model-name:free</code>. Empty slots are skipped.</p>
       {status.models.map((model, i) => (
         <div key={i} className="row">
-          <span className="badge">{i < 4 ? `Active fallback ${i + 1}` : `Reserved ${i + 1}`}</span>
+          <span className="badge">Fallback {i + 1}</span>
           <input
             className="input"
             value={model}

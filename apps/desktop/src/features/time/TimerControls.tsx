@@ -21,22 +21,46 @@ export function TimerControls({
   onDone: () => void;
 }) {
   const toast = useUi((s) => s.showToast);
+  const [runningHere, setRunningHere] = useState(false);
+
+  const refresh = () => {
+    void api.runningTimer().then((t) => {
+      setRunningHere(Boolean(t?.isLocalDevice && t.entry.projectId === projectId && !t.entry.endedAt));
+    }).catch(() => setRunningHere(false));
+  };
+
+  useEffect(() => {
+    refresh();
+    const id = window.setInterval(refresh, 4000);
+    return () => window.clearInterval(id);
+  }, [projectId]);
+
+  const after = () => {
+    refresh();
+    onDone();
+  };
+
+  if (runningHere) {
+    return (
+      <>
+        <button className="btn" type="button" onClick={() => api.pauseTimer().then(after).catch((e) => toast(formatError(e), "error"))}>
+          Pause
+        </button>
+        <button className="btn" type="button" onClick={() => api.stopTimer().then(after).catch((e) => toast(formatError(e), "error"))}>
+          Stop
+        </button>
+      </>
+    );
+  }
+
   return (
-    <>
-      <button
-        className="btn primary"
-        type="button"
-        onClick={() => api.startTimer(projectId, topicId).then(onDone).catch((e) => toast(formatError(e), "error"))}
-      >
-        {label}
-      </button>
-      <button className="btn" type="button" onClick={() => api.pauseTimer().then(onDone).catch((e) => toast(formatError(e), "error"))}>
-        Pause
-      </button>
-      <button className="btn" type="button" onClick={() => api.stopTimer().then(onDone).catch((e) => toast(formatError(e), "error"))}>
-        Stop
-      </button>
-    </>
+    <button
+      className="btn primary"
+      type="button"
+      onClick={() => api.startTimer(projectId, topicId).then(after).catch((e) => toast(formatError(e), "error"))}
+    >
+      {label}
+    </button>
   );
 }
 

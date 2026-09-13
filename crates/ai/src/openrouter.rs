@@ -1,6 +1,7 @@
 use crate::error::{AiError, AiFailureKind, AiResult, AttemptRecord};
 use crate::fallback::FallbackOutcome;
 use crate::provider::{classify_http, AiProvider, CompletionRequest, CompletionResponse};
+use crate::settings::MAX_MODEL_SLOTS;
 use async_trait::async_trait;
 use futures_util::StreamExt;
 use serde_json::{json, Value};
@@ -162,7 +163,7 @@ pub async fn stream_with_fallback(
         return Err(AiError::NoModels);
     }
     let mut attempts = Vec::new();
-    for (index, model) in models.iter().take(4).enumerate() {
+    for (index, model) in models.iter().take(MAX_MODEL_SLOTS).enumerate() {
         request.model = model.clone();
         let mut got_token = false;
         let result = provider

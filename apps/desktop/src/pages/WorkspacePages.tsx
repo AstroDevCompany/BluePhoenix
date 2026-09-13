@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { ActivityEvent, Category, GpaDashboard, ProjectCard } from "../lib/types";
+import type { Category, GpaDashboard, ProjectCard } from "../lib/types";
 import { api } from "../lib/ipc";
 import { ProjectCardView } from "../features/projects/ProjectCardView";
 import { ProjectDetail } from "../features/projects/ProjectDetail";
@@ -10,7 +10,6 @@ import { KindDashboard } from "../features/workspaces/registry";
 import { EmptyState } from "../components/ui/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import type { WorkspacePage } from "../components/router";
-import { formatActivityEvent, formatDate } from "../lib/format";
 import { useUi } from "../stores/ui";
 
 export function WorkspaceHome({
@@ -50,13 +49,11 @@ function Overview({
 }) {
   const [projects, setProjects] = useState<ProjectCard[]>([]);
   const [dash, setDash] = useState<GpaDashboard | null>(null);
-  const [activity, setActivity] = useState<ActivityEvent[]>([]);
   const [ready, setReady] = useState(false);
   useEffect(() => {
     setReady(false);
     void Promise.all([
       api.listProjects(category.id).then(setProjects),
-      api.listActivity({ categoryId: category.id }).then((rows) => setActivity(rows as ActivityEvent[])),
       category.kind === "university" ? api.universityDashboard().then(setDash) : Promise.resolve(),
     ]).finally(() => setReady(true));
   }, [category.id, category.kind, refreshKey]);
@@ -80,19 +77,6 @@ function Overview({
               <ProjectCardView key={p.id} project={p} category={category} onOpen={() => onOpen(p.id)} onRefresh={() => void api.listProjects(category.id).then(setProjects)} />
             ))}
           </div>
-        )}
-      </div>
-      <div className="section">
-        <h2 className="h2">Recent activity</h2>
-        {!ready ? null : activity.length === 0 ? (
-          <EmptyState title="Nothing recorded yet" body="Actions you take in this workspace will show up here." />
-        ) : (
-          activity.slice(0, 8).map((a) => (
-            <div key={a.id} className="list-row">
-              <span className="list-row-title">{formatActivityEvent(a.eventType)}</span>
-              <span className="list-row-meta">{a.projectName ? `${a.projectName} · ` : ""}{formatDate(a.createdAt)}</span>
-            </div>
-          ))
         )}
       </div>
     </div>

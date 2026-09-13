@@ -631,7 +631,9 @@ body:not(.app-ready) .app-atmosphere {
 .row > .btn + .btn,
 .list-row > .btn + .btn,
 .chip-row > .btn + .btn,
-.project-card > .btn + .btn {
+.project-card > .btn + .btn,
+.menu-pop > .btn + .btn,
+.more-menu-pop > .btn + .btn {
   margin-inline-start: 0;
 }
 
@@ -1960,48 +1962,163 @@ html[data-reduced-motion="true"]::view-transition-new(*) {
 }
 
 .detail-head {
-  position: sticky;
-  top: calc(var(--space-7) * -1);
-  z-index: 3;
-  margin: calc(var(--space-7) * -1) calc(var(--space-8) * -1) var(--space-5);
-  padding: var(--space-5) var(--space-8) var(--space-4);
-  background: color-mix(in srgb, var(--bg-0) 82%, transparent);
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
-  border-bottom: 1px solid var(--border);
+  padding-bottom: var(--space-3);
 }
 
 .detail-head .h1 {
   margin: 0;
+  font-size: 22px;
 }
 
-.detail-actions {
-  margin-top: var(--space-3);
+.detail-head-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.detail-head-actions {
+  justify-content: flex-end;
+}
+
+.detail-head-actions .select-root {
+  width: 180px;
+  flex: 0 0 180px;
 }
 
 .detail-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-1);
-  margin: 0 0 var(--space-5);
+  gap: var(--space-2) var(--space-4);
+  margin: var(--space-3) 0 0;
 }
 
 .detail-tabs button {
-  height: 32px;
-  padding: 0 14px;
-  border: 1px solid transparent;
+  height: auto;
+  padding: 4px 0;
+  border: 0;
+  border-bottom: 1px solid transparent;
   background: transparent;
-  color: var(--text-muted);
-  border-radius: 999px;
+  color: var(--text-faint);
+  border-radius: 0;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
 }
 
 .detail-tabs button[aria-selected="true"] {
-  background: color-mix(in srgb, var(--workspace) 16%, transparent);
-  border-color: color-mix(in srgb, var(--workspace) 28%, transparent);
+  background: transparent;
+  border-bottom-color: var(--text);
   color: var(--text);
+  box-shadow: none;
+}
+
+.detail-stage {
+  padding: var(--space-6) 0 var(--space-8);
+}
+
+.detail-hero {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  margin: 0 0 var(--space-5);
+}
+
+.detail-lede {
+  margin: calc(var(--space-5) * -1) 0 var(--space-6);
+}
+
+.detail-pane.page-enter {
+  animation: detail-in var(--duration-med) var(--ease-out);
+}
+
+@keyframes detail-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+.detail-overview {
+  display: flex;
+  flex-direction: column;
+}
+
+.detail-section {
+  padding: var(--space-6) 0;
+  border-top: 1px solid var(--border);
+}
+
+.detail-section:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.detail-section-title {
+  margin: 0 0 var(--space-4);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  font-weight: 600;
+}
+
+.detail-section .muted {
+  margin: 0 0 var(--space-3);
+}
+
+.metric-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6) var(--space-8);
+}
+
+.metric span {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  font-weight: 500;
+}
+
+.metric b {
+  display: block;
+  margin-top: 4px;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.detail-empty {
+  padding: var(--space-6) 0 var(--space-5);
+}
+
+.detail-empty-title {
+  margin: 0 0 var(--space-2);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.add-disclosure {
+  margin-top: var(--space-4);
+}
+
+.add-disclosure summary.btn {
+  display: inline-flex;
+  width: fit-content;
+  list-style: none;
+}
+
+.add-disclosure summary::-webkit-details-marker {
+  display: none;
+}
+
+.add-disclosure-body {
+  margin-top: var(--space-3);
+  padding: var(--space-4);
+}
+
+.ai-actions-card {
+  padding: var(--space-5);
 }
 
 .more-menu {
@@ -2022,7 +2139,47 @@ html[data-reduced-motion="true"]::view-transition-new(*) {
 
 .more-menu-pop .btn {
   width: 100%;
+  margin-inline: 0;
   justify-content: flex-start;
+}
+
+.git-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.git-table th,
+.git-table td {
+  text-align: left;
+  padding: 10px 16px 10px 0;
+  vertical-align: top;
+}
+
+.git-table th:last-child,
+.git-table td:last-child {
+  padding-right: 0;
+}
+
+.git-table th {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+  padding-top: 0;
+}
+
+.git-table td {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.git-table .git-commit {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .command-output {

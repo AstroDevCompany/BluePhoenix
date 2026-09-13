@@ -2,8 +2,8 @@ use serde::{Deserialize, Serialize};
 
 pub const SETTINGS_NAMESPACE: &str = "ai";
 pub const OPENROUTER_SECRET_KIND: &str = "openrouter_api_key";
-pub const MAX_MODEL_SLOTS: usize = 8;
-pub const ACTIVE_FALLBACK_SLOTS: usize = 4;
+pub const MAX_MODEL_SLOTS: usize = 4;
+pub const ACTIVE_FALLBACK_SLOTS: usize = MAX_MODEL_SLOTS;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -55,18 +55,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn only_first_four_nonempty_are_active() {
+    fn nonempty_slots_are_active() {
+        let mut s = AiSettings::default();
+        s.models = vec!["a".into(), "".into(), "b".into(), "c".into()];
+        s = s.normalize();
+        assert_eq!(s.active_models(), vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn extra_slots_are_dropped() {
         let mut s = AiSettings::default();
         s.models = vec![
             "a".into(),
-            "".into(),
             "b".into(),
             "c".into(),
             "d".into(),
             "e".into(),
-            "f".into(),
-            "g".into(),
         ];
+        s = s.normalize();
+        assert_eq!(s.models.len(), 4);
         assert_eq!(s.active_models(), vec!["a", "b", "c", "d"]);
     }
 }

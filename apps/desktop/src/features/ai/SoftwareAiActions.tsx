@@ -35,8 +35,7 @@ export function SoftwareAiActions({
   };
 
   return (
-    <div className="section">
-      <h2 className="h2">AI</h2>
+    <div className="glass-panel ai-actions-card">
       <div className="row">
         <button className="btn" type="button" disabled={!!busy} onClick={() => void run("todos", async () => {
           const res = await api.aiPrioritizeTodos(projectId) as { result: { order: { id: string; reason: string }[]; summary: string } };
