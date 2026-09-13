@@ -8,8 +8,8 @@ use bluephoenix_ai::prompts;
 use bluephoenix_ai::settings::AiSettings;
 use bluephoenix_ai::{
     complete_with_fallback, parse_agent_prompt, parse_changelog, parse_commit, parse_prioritize, parse_search,
-    parse_todos, require_ready, stream_with_fallback, ChatMessage, CompletionRequest, OpenRouterProvider,
-    OPENROUTER_SECRET_KIND,
+    parse_software_folder_draft, parse_todos, require_ready, stream_with_fallback, ChatMessage, CompletionRequest,
+    OpenRouterProvider, OPENROUTER_SECRET_KIND,
 };
 use bluephoenix_domain::ids::CategoryKind;
 use serde::Deserialize;
@@ -505,6 +505,87 @@ pub async fn ai_suggest_commit(state: State<'_, AppState>, project_id: String) -
         "truncated": ctx.truncated,
         "fallbackUsed": outcome.fallback_used,
     }))
+}
+
+#[tauri::command]
+pub async fn ai_inspect_software_folder(state: State<'_, AppState>, local_path: String) -> AppResult<serde_json::Value> {
+    let path = std::path::PathBuf::from(local_path.trim());
+    if local_path.trim().is_empty() {
+        return Err(AppError::FolderMissing);
+    }
+    let (git_path, tags) = state.db.with(|c| {
+        Ok((
+            db::load_settings(c).git_path,
+            db::list_tags(c)?,
+        ))
+    })?;
+    let facts = crate::project_facts::collect(&path, &git_path)?;
+    let languages: Vec<String> = tags
+        .iter()
+        .filter(|t| t.kind == "language")
+        .map(|t| t.name.clone())
+        .collect();
+    let frameworks: Vec<String> = tags
+        .iter()
+        .filter(|t| t.kind == "framework")
+        .map(|t| t.name.clone())
+        .collect();
+    let outcome = complete_text(
+        &state,
+        vec![
+            ChatMessage {
+                role: "system".into(),
+                content: "Return JSON only. Extract from excerpts. Never invent. Never write files.".into(),
+            },
+            ChatMessage {
+                role: "user".into(),
+                content: prompts::inspect_software_folder_prompt(
+                    &facts.evidence,
+                    &languages.join(", "),
+                    &frameworks.join(", "),
+                ),
+            },
+        ],
+        true,
+    )
+    .await?;
+    let parsed = parse_software_folder_draft(&outcome.response.text)
+        .ok_or_else(|| AppError::msg("Model returned invalid JSON"))?;
+    let merged = crate::project_facts::merge_draft(
+        &facts,
+        crate::project_facts::SoftwareFolderDraft {
+            name: parsed.name,
+            description: parsed.description,
+            github_url: parsed.github_url,
+            website_url: parsed.website_url,
+            languages: parsed.languages,
+            frameworks: parsed.frameworks,
+        },
+    );
+    Ok(json!({
+        "result": {
+            "name": merged.name,
+            "description": merged.description,
+            "githubUrl": merged.github_url,
+            "websiteUrl": merged.website_url,
+            "languageIds": map_tag_ids(&tags, &merged.languages, "language"),
+            "frameworkIds": map_tag_ids(&tags, &merged.frameworks, "framework"),
+        },
+        "fallbackUsed": outcome.fallback_used,
+    }))
+}
+
+fn map_tag_ids(tags: &[TagDto], names: &[String], kind: &str) -> Vec<String> {
+    let mut ids = Vec::new();
+    for name in names {
+        let Some(id) = tags.iter().find(|t| t.kind == kind && t.name.eq_ignore_ascii_case(name.trim())).map(|t| t.id.clone()) else {
+            continue;
+        };
+        if !ids.contains(&id) {
+            ids.push(id);
+        }
+    }
+    ids
 }
 
 #[tauri::command]

@@ -10,6 +10,7 @@ mod jobs;
 mod macos;
 mod models;
 mod native;
+mod project_facts;
 mod secrets;
 mod state;
 mod sync;
@@ -207,6 +208,7 @@ pub fn run() {
             ai::ai_generate_changelog,
             ai::ai_todos_from_changelog,
             ai::ai_suggest_commit,
+            ai::ai_inspect_software_folder,
             ai::git_log,
             ai::git_diff,
             ai::list_document_records,

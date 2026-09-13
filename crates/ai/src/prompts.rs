@@ -123,6 +123,16 @@ pub fn commit_prompt(diff: &str, log: &str, follow_style: bool) -> String {
     )
 }
 
+pub fn inspect_software_folder_prompt(evidence: &str, languages: &str, frameworks: &str) -> String {
+    format!(
+        "Extract software project metadata from the excerpts. Return JSON only: {{\"name\":\"\",\"description\":\"\",\"githubUrl\":\"\",\"websiteUrl\":\"\",\"languages\":[],\"frameworks\":[]}}.\n\
+Use only the provided excerpts. Leave a field empty if it is not in the sources. Do not invent names, URLs, or marketing copy. Description must be a short condensation of README or manifest text, not new prose. languages and frameworks must be chosen only from the allowed lists.\n\
+Allowed languages: {languages}\n\
+Allowed frameworks: {frameworks}\n\
+Excerpts:\n{evidence}"
+    )
+}
+
 pub fn document_qa_suffix(chunks: &str, empty: bool) -> String {
     if empty {
         "No document excerpts were retrieved. Do not invent document content. Say you do not have that text.".into()
@@ -201,5 +211,14 @@ mod tests {
         let off = commit_prompt("diff", "feat: foo", false);
         assert!(off.contains("conventional"));
         assert!(!off.contains("feat: foo"));
+    }
+
+    #[test]
+    fn inspect_folder_prompt_forbids_inventing() {
+        let prompt = inspect_software_folder_prompt("Folder: demo\nREADME.md:\nhello", "Rust, TypeScript", "React");
+        assert!(prompt.contains("Do not invent"));
+        assert!(prompt.contains("Use only the provided excerpts"));
+        assert!(prompt.contains("Allowed languages: Rust, TypeScript"));
+        assert!(prompt.contains("hello"));
     }
 }

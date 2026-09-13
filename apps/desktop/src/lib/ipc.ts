@@ -116,6 +116,18 @@ export const api = {
   aiTodosFromChangelog: (projectId: string, changelog: string) =>
     invoke("ai_todos_from_changelog", { projectId, changelog }),
   aiSuggestCommit: (projectId: string) => invoke("ai_suggest_commit", { projectId }),
+  aiInspectSoftwareFolder: (localPath: string) =>
+    invoke<{
+      result: {
+        name: string;
+        description: string;
+        githubUrl: string;
+        websiteUrl: string;
+        languageIds: string[];
+        frameworkIds: string[];
+      };
+      fallbackUsed?: boolean;
+    }>("ai_inspect_software_folder", { localPath }),
   gitLog: (projectId: string) => invoke<string[]>("git_log", { projectId }),
   gitDiff: (projectId: string) => invoke("git_diff", { projectId }),
   listDocumentRecords: (projectId: string) => invoke("list_document_records", { projectId }),

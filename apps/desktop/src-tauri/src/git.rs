@@ -99,6 +99,49 @@ fn stdout(git: &str, repo: &Path, args: &[&str]) -> Option<String> {
     }
 }
 
+pub fn origin_url(configured: &str, repo: &Path) -> Option<String> {
+    if !repo.exists() {
+        return None;
+    }
+    let git = git_bin(configured);
+    if let Some(url) = stdout(&git, repo, &["config", "--get", "remote.origin.url"]) {
+        return Some(url);
+    }
+    let remotes = stdout(&git, repo, &["remote", "-v"])?;
+    remotes.lines().find_map(|line| {
+        let mut parts = line.split_whitespace();
+        let name = parts.next()?;
+        let url = parts.next()?;
+        (name == "origin").then(|| url.to_string())
+    })
+}
+
+pub fn github_https_url(remote: &str) -> Option<String> {
+    let remote = remote.trim();
+    if remote.is_empty() {
+        return None;
+    }
+    let trimmed = remote.trim_end_matches('/').trim_end_matches(".git");
+    let path = if let Some(rest) = trimmed.strip_prefix("git@github.com:") {
+        rest
+    } else if let Some(rest) = trimmed.strip_prefix("ssh://git@github.com/") {
+        rest
+    } else if let Some(rest) = trimmed.strip_prefix("https://github.com/") {
+        rest
+    } else if let Some(rest) = trimmed.strip_prefix("http://github.com/") {
+        rest
+    } else if let Some(rest) = trimmed.strip_prefix("https://www.github.com/") {
+        rest
+    } else {
+        return None;
+    };
+    let path = path.trim_start_matches('/');
+    if path.is_empty() || !path.contains('/') {
+        return None;
+    }
+    Some(format!("https://github.com/{path}"))
+}
+
 fn ahead_behind(git: &str, repo: &Path) -> (i64, i64) {
     let Some(raw) = stdout(git, repo, &["rev-list", "--left-right", "--count", "@{u}...HEAD"]) else {
         return (0, 0);
@@ -307,5 +350,18 @@ mod tests {
         };
         assert!(!ctx.has_history);
         assert!(!ctx.dirty);
+    }
+
+    #[test]
+    fn github_https_from_ssh_and_https() {
+        assert_eq!(
+            github_https_url("git@github.com:org/repo.git"),
+            Some("https://github.com/org/repo".into())
+        );
+        assert_eq!(
+            github_https_url("https://github.com/org/repo.git"),
+            Some("https://github.com/org/repo".into())
+        );
+        assert_eq!(github_https_url("https://gitlab.com/org/repo.git"), None);
     }
 }

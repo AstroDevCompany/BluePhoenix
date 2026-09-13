@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Plus, X } from "lucide-react";
 import type { Bootstrap, Tag } from "../../lib/types";
 import { api, formatError } from "../../lib/ipc";
@@ -33,6 +33,7 @@ export function CreateProjectDialog({
   const [langIds, setLangIds] = useState<string[]>([]);
   const [fwIds, setFwIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [filling, setFilling] = useState(false);
   const toast = useUi((s) => s.showToast);
   const languages = bootstrap.tags.filter((t) => t.kind === "language");
   const frameworks = bootstrap.tags.filter((t) => t.kind === "framework");
@@ -80,6 +81,25 @@ export function CreateProjectDialog({
     }
   };
 
+  const fillWithAi = async () => {
+    if (!localPath.trim()) return;
+    setFilling(true);
+    try {
+      const res = await api.aiInspectSoftwareFolder(localPath);
+      const draft = res.result;
+      if (draft.name.trim()) setName(draft.name.trim());
+      if (draft.description.trim()) setDescription(draft.description.trim());
+      if (draft.githubUrl.trim()) setGithub(draft.githubUrl.trim());
+      if (draft.websiteUrl.trim()) setWebsite(draft.websiteUrl.trim());
+      if (draft.languageIds.length) setLangIds(draft.languageIds);
+      if (draft.frameworkIds.length) setFwIds(draft.frameworkIds);
+    } catch (e) {
+      toast(formatError(e), "error");
+    } finally {
+      setFilling(false);
+    }
+  };
+
   const kind = category?.kind;
   const fields = useMemo(() => kind, [kind]);
 
@@ -102,7 +122,22 @@ export function CreateProjectDialog({
           <span className="label">Description</span>
           <textarea className="textarea" value={description} onChange={(e) => setDescription(e.target.value)} />
         </label>
-        <PathField label="Folder" value={localPath} onChange={setLocalPath} folder />
+        <PathField
+          label="Folder"
+          value={localPath}
+          onChange={setLocalPath}
+          folder
+          extra={fields === "software" ? (
+            <button
+              className="btn"
+              type="button"
+              disabled={busy || filling || !localPath.trim()}
+              onClick={() => void fillWithAi()}
+            >
+              {filling ? "Reading…" : "Fill with AI"}
+            </button>
+          ) : null}
+        />
         {fields === "software" ? (
           <>
             <label className="field">
@@ -141,14 +176,26 @@ export function CreateProjectDialog({
         {fields !== "software" ? <PathField label="Primary file" value={primaryFile} onChange={setPrimaryFile} /> : null}
         <div className="row" style={{ justifyContent: "flex-end", marginTop: 8 }}>
           <button className="btn ghost" type="button" onClick={onClose}>Cancel</button>
-          <button className="btn primary" type="button" disabled={busy || !name.trim()} onClick={() => void submit()}>Create</button>
+          <button className="btn primary" type="button" disabled={busy || filling || !name.trim()} onClick={() => void submit()}>Create</button>
         </div>
       </div>
     </div>
   );
 }
 
-function PathField({ label, value, onChange, folder }: { label: string; value: string; onChange: (v: string) => void; folder?: boolean }) {
+function PathField({
+  label,
+  value,
+  onChange,
+  folder,
+  extra,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  folder?: boolean;
+  extra?: ReactNode;
+}) {
   const toast = useUi((s) => s.showToast);
   return (
     <label className="field">
@@ -163,6 +210,7 @@ function PathField({ label, value, onChange, folder }: { label: string; value: s
             toast(formatError(e), "error");
           }
         }}>Browse</button>
+        {extra}
       </div>
     </label>
   );

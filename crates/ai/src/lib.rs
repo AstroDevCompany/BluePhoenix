@@ -19,8 +19,9 @@ pub use parsers::{parse_document, semantic_chunks, DocumentParser, ParsedDocumen
 pub use provider::{redact, AiProvider, ChatMessage, CompletionRequest, CompletionResponse};
 pub use readiness::{looks_like_sentence, require_ready};
 pub use schema::{
-    parse_agent_prompt, parse_changelog, parse_commit, parse_prioritize, parse_search, parse_todos, AgentPrompt,
-    ChangelogDraft, CommitSuggestion, PrioritizeResult, SearchInterpretation, TodoOrderItem, TodoProposal,
+    parse_agent_prompt, parse_changelog, parse_commit, parse_prioritize, parse_search, parse_software_folder_draft,
+    parse_todos, AgentPrompt, ChangelogDraft, CommitSuggestion, PrioritizeResult, SearchInterpretation,
+    SoftwareFolderDraft, TodoOrderItem, TodoProposal,
 };
 pub use settings::{AiSettings, ACTIVE_FALLBACK_SLOTS, MAX_MODEL_SLOTS, OPENROUTER_SECRET_KIND, SETTINGS_NAMESPACE};
 
