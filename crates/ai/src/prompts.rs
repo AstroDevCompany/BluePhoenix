@@ -145,6 +145,20 @@ Files:\n{evidence}"
     )
 }
 
+pub fn scan_commands_prompt(evidence: &str, found_json: &str, existing_json: &str) -> String {
+    format!(
+        "Propose runnable project commands from configs and the folder tree. Return JSON only: {{\"commands\":[{{\"name\":\"\",\"command\":\"\",\"description\":\"\",\"workingDirectory\":null,\"source\":\"found\",\"reasoning\":\"\"}}],\"needFiles\":[]}}.\n\
+Found scripts already extracted:\n{found_json}\n\
+Commands already saved in BluePhoenix (do not repeat):\n{existing_json}\n\
+source must be \"found\" (from those scripts or an explicit Makefile/just/package script) or \"hypothesized\" (ordinary stack tasks implied by the files, such as cargo test, pytest, docker compose up).\n\
+Do not invent scripts that the tree does not support. Never write or modify files. Never run commands.\n\
+Each command must be a simple argv line with no shell operators (no &&, ||, |, ;, redirects, backticks, env assignments).\n\
+workingDirectory is a relative folder or null for the project root.\n\
+If a listed relative path would materially improve the list and was not excerpted, put it in needFiles (max 6).\n\
+Files:\n{evidence}"
+    )
+}
+
 pub fn document_qa_suffix(chunks: &str, empty: bool) -> String {
     if empty {
         "No document excerpts were retrieved. Do not invent document content. Say you do not have that text.".into()
@@ -236,5 +250,15 @@ mod tests {
         assert!(prompt.contains("human product name"));
         assert!(prompt.contains("Allowed languages: Rust, TypeScript"));
         assert!(prompt.contains("hello"));
+    }
+
+    #[test]
+    fn scan_commands_prompt_forbids_inventing_and_shell() {
+        let prompt = scan_commands_prompt("Tree:\nCargo.toml\n", "[{\"command\":\"cargo test\"}]", "[]");
+        assert!(prompt.contains("Do not invent scripts"));
+        assert!(prompt.contains("no &&"));
+        assert!(prompt.contains("hypothesized"));
+        assert!(prompt.contains("cargo test"));
+        assert!(prompt.contains("Never run commands"));
     }
 }

@@ -1,5 +1,6 @@
 mod ai;
 mod ai_store;
+mod command_scan;
 mod commands;
 mod db;
 mod documents;
@@ -213,6 +214,7 @@ pub fn run() {
             ai::ai_todos_from_changelog,
             ai::ai_suggest_commit,
             ai::ai_inspect_software_folder,
+            ai::ai_scan_commands,
             ai::git_log,
             ai::git_diff,
             ai::list_document_records,

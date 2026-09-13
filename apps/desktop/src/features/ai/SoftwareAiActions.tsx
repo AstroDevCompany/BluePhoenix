@@ -3,6 +3,15 @@ import { api, formatError } from "../../lib/ipc";
 import { useUi } from "../../stores/ui";
 
 type Proposal = { title: string; description: string; priority: string; reasoning: string };
+type CommandProposal = {
+  name: string;
+  command: string;
+  description: string;
+  workingDirectory?: string | null;
+  source: string;
+  reasoning: string;
+  dangerous: boolean;
+};
 
 export function SoftwareAiActions({
   projectId,
@@ -22,6 +31,8 @@ export function SoftwareAiActions({
   const [draft, setDraft] = useState<{ title: string; body: string } | null>(null);
   const [todos, setTodos] = useState<Proposal[]>([]);
   const [picked, setPicked] = useState<Record<number, boolean>>({});
+  const [commandScan, setCommandScan] = useState<CommandProposal[]>([]);
+  const [pickedCommands, setPickedCommands] = useState<Record<number, boolean>>({});
 
   const run = async (label: string, fn: () => Promise<void>) => {
     setBusy(label);
@@ -69,6 +80,11 @@ export function SoftwareAiActions({
           setCommit(res.result.message);
           toast(res.result.rationale);
         })}>Suggest commit message</button>
+        <button className="btn" type="button" disabled={!!busy} onClick={() => void run("scan", async () => {
+          const res = await api.aiScanCommands(projectId);
+          setCommandScan(res.commands);
+          setPickedCommands(Object.fromEntries(res.commands.map((c, i) => [i, c.source === "found" || !c.dangerous])));
+        })}>Scan commands</button>
       </div>
       {busy ? <p className="muted" aria-live="polite">{busy}…</p> : null}
       {summary ? <p className="glass-panel" style={{ padding: 12, marginTop: 12 }}>{summary}</p> : null}
@@ -112,6 +128,46 @@ export function SoftwareAiActions({
               })();
             });
           }}>Insert selected</button>
+        </div>
+      ) : null}
+      {commandScan.length ? (
+        <div className="glass-panel" style={{ padding: 12, marginTop: 12 }}>
+          {commandScan.map((c, i) => (
+            <label key={`${c.command}-${i}`} className="row" style={{ margin: "6px 0" }}>
+              <input type="checkbox" checked={Boolean(pickedCommands[i])} onChange={(e) => setPickedCommands((s) => ({ ...s, [i]: e.target.checked }))} />
+              <span>
+                <b>{c.name}</b> · {c.source === "found" ? "Found" : "Hypothesized"}
+                {c.dangerous ? " · dangerous" : ""}
+                <br />
+                <span className="muted">{c.command}{c.workingDirectory ? ` · ${c.workingDirectory}` : ""}{c.reasoning ? ` · ${c.reasoning}` : ""}</span>
+              </span>
+            </label>
+          ))}
+          <button className="btn primary" type="button" onClick={() => {
+            confirm("Add selected commands?", "They will appear in the Commands tab. Nothing is run.", () => {
+              void (async () => {
+                let sort = 0;
+                for (const [i, c] of commandScan.entries()) {
+                  if (!pickedCommands[i]) continue;
+                  await api.upsertCommand({
+                    id: "",
+                    projectId,
+                    name: c.name,
+                    command: c.command,
+                    description: c.description ?? "",
+                    workingDirectory: c.workingDirectory ?? null,
+                    pinned: true,
+                    favorite: true,
+                    sortOrder: sort,
+                    dangerous: c.dangerous,
+                  });
+                  sort += 1;
+                }
+                setCommandScan([]);
+                onDone();
+              })();
+            });
+          }}>Add selected</button>
         </div>
       ) : null}
       {commit ? (

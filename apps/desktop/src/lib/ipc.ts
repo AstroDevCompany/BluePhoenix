@@ -129,6 +129,19 @@ export const api = {
       };
       fallbackUsed?: boolean;
     }>("ai_inspect_software_folder", { localPath }),
+  aiScanCommands: (projectId: string) =>
+    invoke<{
+      commands: {
+        name: string;
+        command: string;
+        description: string;
+        workingDirectory?: string | null;
+        source: string;
+        reasoning: string;
+        dangerous: boolean;
+      }[];
+      fallbackUsed?: boolean;
+    }>("ai_scan_commands", { projectId }),
   gitLog: (projectId: string) => invoke<string[]>("git_log", { projectId }),
   gitDiff: (projectId: string) => invoke("git_diff", { projectId }),
   listDocumentRecords: (projectId: string) => invoke("list_document_records", { projectId }),

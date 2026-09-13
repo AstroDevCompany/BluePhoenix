@@ -445,7 +445,7 @@ fn looks_like_url(value: &str) -> bool {
     value.starts_with("http://") || value.starts_with("https://")
 }
 
-fn walk_rel_files(root: &Path) -> Vec<String> {
+pub(crate) fn walk_rel_files(root: &Path) -> Vec<String> {
     let mut out = Vec::new();
     let mut stack = vec![(root.to_path_buf(), 0usize)];
     while let Some((dir, depth)) = stack.pop() {
@@ -519,6 +519,8 @@ fn excerpt_score(rel: &str) -> i32 {
         score = 120;
     } else if MANIFESTS.iter().any(|m| name.eq_ignore_ascii_case(m)) {
         score = 110;
+    } else if is_command_config(&name) {
+        score = 108;
     } else if name == "about.md" || name == "description.md" || name == "intro.md" {
         score = 95;
     } else if matches!(
@@ -556,6 +558,20 @@ fn excerpt_score(rel: &str) -> i32 {
     score - depth * 4
 }
 
+fn is_command_config(name: &str) -> bool {
+    matches!(
+        name,
+        "makefile"
+            | "gnumakefile"
+            | "justfile"
+            | "docker-compose.yml"
+            | "docker-compose.yaml"
+            | "compose.yml"
+            | "compose.yaml"
+            | "turbo.json"
+    )
+}
+
 fn skip_dir_name(name: &str) -> bool {
     SKIP_DIRS.iter().any(|d| name.eq_ignore_ascii_case(d))
 }
@@ -568,7 +584,7 @@ fn skip_file_name(name: &str) -> bool {
     name.contains('.') && SKIP_EXTS.contains(&ext.as_str())
 }
 
-fn read_rel(root: &Path, rel: &str, max: usize) -> Option<String> {
+pub(crate) fn read_rel(root: &Path, rel: &str, max: usize) -> Option<String> {
     let canon = resolve_inside(root, rel)?;
     if !canon.is_file() {
         return None;
@@ -691,5 +707,20 @@ mod tests {
             "https://invented.example",
             evidence
         ));
+    }
+
+    #[test]
+    fn command_configs_are_excerpted() {
+        let dir = std::env::temp_dir().join(format!("bp-make-excerpt-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("Makefile"), "build:\n\techo hi\n").unwrap();
+        fs::write(dir.join("justfile"), "test:\n  cargo test\n").unwrap();
+        let facts = collect(&dir, "").unwrap();
+        fs::remove_dir_all(&dir).unwrap();
+        assert!(facts.evidence.contains("Makefile"));
+        assert!(facts.evidence.contains("build:"));
+        assert!(facts.evidence.contains("justfile"));
+        assert!(facts.evidence.contains("cargo test"));
     }
 }

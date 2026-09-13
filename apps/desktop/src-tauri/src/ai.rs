@@ -7,11 +7,12 @@ use crate::state::AppState;
 use bluephoenix_ai::prompts;
 use bluephoenix_ai::settings::AiSettings;
 use bluephoenix_ai::{
-    complete_with_fallback, parse_agent_prompt, parse_changelog, parse_commit, parse_prioritize,
-    parse_search, parse_software_folder_draft, parse_todos, requested_inspect_files, require_ready,
-    stream_with_fallback, ChatMessage, CompletionRequest, OpenRouterProvider,
-    OPENROUTER_SECRET_KIND,
+    complete_with_fallback, parse_agent_prompt, parse_changelog, parse_commit, parse_command_scan,
+    parse_prioritize, parse_search, parse_software_folder_draft, parse_todos,
+    requested_inspect_files, require_ready, stream_with_fallback, ChatMessage, CommandProposal,
+    CompletionRequest, OpenRouterProvider, OPENROUTER_SECRET_KIND,
 };
+use bluephoenix_domain::commands_safety::is_dangerous;
 use bluephoenix_domain::ids::CategoryKind;
 use serde::Deserialize;
 use serde_json::json;
@@ -688,6 +689,130 @@ pub async fn ai_inspect_software_folder(
         },
         "fallbackUsed": outcome.fallback_used,
     }))
+}
+
+#[tauri::command]
+pub async fn ai_scan_commands(
+    state: State<'_, AppState>,
+    project_id: String,
+) -> AppResult<serde_json::Value> {
+    require_software(&state, &project_id)?;
+    let (git_path, folder, existing) = state.db.with(|c| {
+        let settings = db::load_settings(c);
+        let (local, _) = db::project_binding(c, &state.db.device_id, &project_id);
+        let commands = db::list_commands(c, &project_id)?;
+        Ok((settings.git_path, local, commands))
+    })?;
+    let path = folder.ok_or(AppError::FolderMissing)?;
+    let root = std::path::PathBuf::from(&path);
+    let mut facts = crate::project_facts::collect(&root, &git_path)?;
+    let found = crate::command_scan::extract_found_commands(&root)?;
+    let existing_lines: Vec<String> = existing.iter().map(|c| c.command.clone()).collect();
+    let found_json = serde_json::to_string(&found).unwrap_or_else(|_| "[]".into());
+    let existing_json = serde_json::to_string(&existing_lines).unwrap_or_else(|_| "[]".into());
+    let scan_messages = |evidence: &str| {
+        vec![
+            ChatMessage {
+                role: "system".into(),
+                content: "You scan a local software folder for runnable commands. Return JSON only. Never write or modify files. Never run commands.".into(),
+            },
+            ChatMessage {
+                role: "user".into(),
+                content: prompts::scan_commands_prompt(evidence, &found_json, &existing_json),
+            },
+        ]
+    };
+    let mut outcome = complete_text(&state, scan_messages(&facts.evidence), true).await?;
+    let mut parsed = parse_command_scan(&outcome.response.text).unwrap_or_default();
+    let needed = requested_inspect_files(&outcome.response.text);
+    if parsed.is_empty() && !needed.is_empty() {
+        let extra = crate::project_facts::read_extra_files(&root, &needed);
+        if !extra.trim().is_empty() {
+            facts.evidence.push_str(&extra);
+            outcome = complete_text(&state, scan_messages(&facts.evidence), true).await?;
+            if let Some(again) = parse_command_scan(&outcome.response.text) {
+                parsed = again;
+            }
+        }
+    }
+    let merged = merge_scan_commands(found, parsed, &existing);
+    if merged.is_empty() {
+        return Err(AppError::msg("No commands found in project configs"));
+    }
+    Ok(json!({
+        "commands": merged,
+        "fallbackUsed": outcome.fallback_used,
+    }))
+}
+
+fn merge_scan_commands(
+    found: Vec<crate::command_scan::FoundCommand>,
+    model: Vec<CommandProposal>,
+    existing: &[CommandDto],
+) -> Vec<serde_json::Value> {
+    use crate::command_scan::normalize_command;
+    use std::collections::{HashMap, HashSet};
+
+    let existing_keys: HashSet<String> = existing
+        .iter()
+        .map(|c| normalize_command(&c.command))
+        .collect();
+    let mut order: Vec<String> = Vec::new();
+    let mut by_key: HashMap<String, CommandProposal> = HashMap::new();
+
+    let mut consider = |item: CommandProposal| {
+        let cmd_key = normalize_command(&item.command);
+        if cmd_key.is_empty() || existing_keys.contains(&cmd_key) {
+            return;
+        }
+        let key = format!(
+            "{}|{}",
+            cmd_key,
+            item.working_directory.as_deref().unwrap_or("")
+        );
+        if let Some(current) = by_key.get_mut(&key) {
+            if current.description.is_empty() && !item.description.is_empty() {
+                current.description = item.description;
+            }
+            if current.reasoning.is_empty() && !item.reasoning.is_empty() {
+                current.reasoning = item.reasoning;
+            }
+            return;
+        }
+        order.push(key.clone());
+        by_key.insert(key, item);
+    };
+
+    for item in found {
+        consider(CommandProposal {
+            name: item.name,
+            command: item.command,
+            description: item.description,
+            working_directory: item.working_directory,
+            source: "found".into(),
+            reasoning: item.reasoning,
+        });
+    }
+    for item in model {
+        consider(item);
+    }
+
+    order
+        .into_iter()
+        .take(20)
+        .filter_map(|key| by_key.remove(&key))
+        .map(|item| {
+            json!({
+                "name": item.name,
+                "command": item.command,
+                "description": item.description,
+                "workingDirectory": item.working_directory,
+                "source": item.source,
+                "reasoning": item.reasoning,
+                "dangerous": is_dangerous(&item.command),
+            })
+        })
+        .collect()
 }
 
 fn map_tag_ids(tags: &[TagDto], names: &[String], kind: &str) -> Vec<String> {

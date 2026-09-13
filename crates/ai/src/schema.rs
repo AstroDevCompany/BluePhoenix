@@ -82,6 +82,23 @@ pub struct SoftwareFolderDraft {
     pub frameworks: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct CommandProposal {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub command: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub working_directory: Option<String>,
+    #[serde(default)]
+    pub source: String,
+    #[serde(default)]
+    pub reasoning: String,
+}
+
 pub fn parse_search(text: &str) -> Option<SearchInterpretation> {
     let value = extract_json_object(text)?;
     serde_json::from_value(value).ok()
@@ -125,6 +142,69 @@ pub fn parse_software_folder_draft(text: &str) -> Option<SoftwareFolderDraft> {
         languages: json_string_list(obj, &["languages"]),
         frameworks: json_string_list(obj, &["frameworks"]),
     })
+}
+
+pub fn parse_command_scan(text: &str) -> Option<Vec<CommandProposal>> {
+    let value = extract_json_object(text)?;
+    let raw = if let Ok(list) = serde_json::from_value::<Vec<CommandProposal>>(value.clone()) {
+        list
+    } else {
+        value
+            .get("commands")
+            .cloned()
+            .and_then(|v| serde_json::from_value(v).ok())?
+    };
+    Some(sanitize_command_proposals(raw))
+}
+
+fn sanitize_command_proposals(list: Vec<CommandProposal>) -> Vec<CommandProposal> {
+    list.into_iter()
+        .filter_map(|mut item| {
+            item.name = item.name.trim().to_string();
+            item.command = item.command.split_whitespace().collect::<Vec<_>>().join(" ");
+            item.description = item.description.trim().to_string();
+            item.reasoning = item.reasoning.trim().to_string();
+            if let Some(dir) = item.working_directory.take() {
+                let cleaned = dir.trim().replace('\\', "/");
+                if !cleaned.is_empty()
+                    && cleaned != "."
+                    && !cleaned.contains("..")
+                    && !cleaned.starts_with('/')
+                {
+                    item.working_directory = Some(cleaned);
+                }
+            }
+            if item.name.is_empty() || item.command.is_empty() || has_disallowed_shell(&item.command)
+            {
+                return None;
+            }
+            if item.source.trim().eq_ignore_ascii_case("found") {
+                item.source = "found".into();
+            } else {
+                item.source = "hypothesized".into();
+            }
+            Some(item)
+        })
+        .collect()
+}
+
+fn has_disallowed_shell(command: &str) -> bool {
+    let compact = command.trim();
+    if compact.contains("&&")
+        || compact.contains("||")
+        || compact.contains(';')
+        || compact.contains('|')
+        || compact.contains('>')
+        || compact.contains('<')
+        || compact.contains('`')
+        || compact.contains('$')
+    {
+        return true;
+    }
+    compact
+        .split_whitespace()
+        .next()
+        .is_some_and(|token| token.contains('='))
 }
 
 pub fn requested_inspect_files(text: &str) -> Vec<String> {
@@ -206,5 +286,15 @@ mod tests {
             requested_inspect_files("{\"needFiles\":[\"src/lib.rs\",\"../etc/passwd\"]}"),
             vec!["src/lib.rs", "../etc/passwd"]
         );
+        let commands = parse_command_scan(
+            "Sure.\n{\"commands\":[{\"name\":\"Dev\",\"command\":\"pnpm run dev\",\"source\":\"found\",\"reasoning\":\"package.json scripts.dev\"},{\"name\":\"Bad\",\"command\":\"rm -rf / && echo\"}]}\n",
+        )
+        .unwrap();
+        assert_eq!(commands.len(), 1);
+        assert_eq!(commands[0].command, "pnpm run dev");
+        assert_eq!(commands[0].source, "found");
+        assert!(parse_command_scan("{\"commands\":[{\"name\":\"X\",\"command\":\"FOO=1 pnpm test\"}]}")
+            .unwrap()
+            .is_empty());
     }
 }

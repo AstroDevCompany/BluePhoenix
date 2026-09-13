@@ -21,7 +21,7 @@ Chat uses SSE streaming. Structured tools (search, TODOs, changelog, commit mess
 - First-launch popup after the chrome is ready (skippable; never nags again)
 - Titlebar toggle for the right-hand chat rail (local SQLite history)
 - Command palette: local FTS on each keystroke; natural-language interpretation only on Enter
-- Software project actions: prioritize TODOs, changelog helpers, coding-agent prompt, commit-message suggestion (copy only — never auto-commits)
+- Software project actions: prioritize TODOs, changelog helpers, coding-agent prompt, commit-message suggestion (copy only — never auto-commits), scan commands from project configs (propose, then insert selected — never auto-runs)
 
 ## Documents
 
