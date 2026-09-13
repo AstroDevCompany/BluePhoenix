@@ -2,10 +2,8 @@ use crate::compat::{
     self, chat_completions_body, completion_text, paid_variant, provider_error_text,
     split_message_text,
 };
-use crate::error::{AiError, AiFailureKind, AiResult, AttemptRecord};
-use crate::fallback::FallbackOutcome;
+use crate::error::{AiError, AiFailureKind, AiResult};
 use crate::provider::{classify_http, AiProvider, CompletionRequest, CompletionResponse};
-use crate::settings::MAX_MODEL_SLOTS;
 use async_trait::async_trait;
 use futures_util::StreamExt;
 use serde_json::{json, Value};
@@ -35,26 +33,10 @@ impl OpenRouterProvider {
         chat_completions_body(request)
     }
 
-    pub async fn stream(
-        &self,
-        request: CompletionRequest,
-        mut on_delta: impl FnMut(&str) + Send,
-    ) -> AiResult<CompletionResponse> {
-        let original = request.model.clone();
-        match self.stream_once(request.clone(), &mut on_delta).await {
-            Err(err) if should_retry_paid(&original, &err) => {
-                let mut paid = request;
-                paid.model = paid_variant(&original).unwrap_or(original);
-                self.stream_once(paid, &mut on_delta).await
-            }
-            other => other,
-        }
-    }
-
     async fn stream_once(
         &self,
         request: CompletionRequest,
-        on_delta: &mut (impl FnMut(&str) + Send),
+        on_delta: &mut impl FnMut(&str),
     ) -> AiResult<CompletionResponse> {
         if self.api_key.trim().is_empty() {
             return Err(AiError::MissingKey);
@@ -166,6 +148,26 @@ impl AiProvider for OpenRouterProvider {
             other => other,
         }
     }
+
+    async fn stream(
+        &self,
+        request: CompletionRequest,
+        on_delta: &mut (dyn FnMut(String) + Send),
+    ) -> AiResult<CompletionResponse> {
+        let original = request.model.clone();
+        match self
+            .stream_once(request.clone(), &mut |delta| on_delta(delta.to_string()))
+            .await
+        {
+            Err(err) if should_retry_paid(&original, &err) => {
+                let mut paid = request;
+                paid.model = paid_variant(&original).unwrap_or(original);
+                self.stream_once(paid, &mut |delta| on_delta(delta.to_string()))
+                    .await
+            }
+            other => other,
+        }
+    }
 }
 
 impl OpenRouterProvider {
@@ -239,58 +241,6 @@ fn sse_reasoning_delta(line: &str) -> Option<String> {
     } else {
         Some(hidden)
     }
-}
-
-pub async fn stream_with_fallback(
-    provider: &OpenRouterProvider,
-    models: &[String],
-    mut request: CompletionRequest,
-    mut on_delta: impl FnMut(&str) + Send,
-) -> AiResult<FallbackOutcome> {
-    if models.is_empty() {
-        return Err(AiError::NoModels);
-    }
-    let mut attempts = Vec::new();
-    for (index, model) in models.iter().take(MAX_MODEL_SLOTS).enumerate() {
-        request.model = model.clone();
-        let mut got_token = false;
-        let result = provider
-            .stream(request.clone(), |delta| {
-                if !delta.is_empty() {
-                    got_token = true;
-                }
-                on_delta(delta);
-            })
-            .await;
-        match result {
-            Ok(response) => {
-                return Ok(FallbackOutcome {
-                    fallback_used: index > 0,
-                    attempted: {
-                        let mut used: Vec<String> = attempts
-                            .iter()
-                            .map(|a: &AttemptRecord| a.model.clone())
-                            .collect();
-                        used.push(model.clone());
-                        used
-                    },
-                    response,
-                });
-            }
-            Err(err) => {
-                let kind = err.kind().unwrap_or(AiFailureKind::Other);
-                attempts.push(AttemptRecord {
-                    model: model.clone(),
-                    kind,
-                    message: err.user_message(),
-                });
-                if got_token || !kind.should_fallback() {
-                    return Err(err);
-                }
-            }
-        }
-    }
-    Err(AiError::AllFailed { attempts })
 }
 
 pub fn parse_sse_delta(line: &str) -> Option<(String, Option<String>, bool)> {

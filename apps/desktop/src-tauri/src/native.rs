@@ -165,3 +165,9 @@ pub fn data_dir() -> AppResult<PathBuf> {
     fs::create_dir_all(&dir)?;
     Ok(dir)
 }
+
+pub fn models_dir() -> AppResult<PathBuf> {
+    let dir = data_dir()?.join("models");
+    fs::create_dir_all(&dir)?;
+    Ok(dir)
+}

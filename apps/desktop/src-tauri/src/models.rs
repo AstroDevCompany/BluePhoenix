@@ -392,6 +392,34 @@ pub struct AiStatusDto {
     pub setup_dismissed: bool,
     pub signed_in: bool,
     pub cloud_secret: bool,
+    pub provider: String,
+    pub local_model_id: Option<String>,
+    pub local_models: Vec<LocalModelDto>,
+    pub local_engine: LocalEngineStatusDto,
+    pub local_ctx_len: u32,
+    pub local_gpu_offload: bool,
+    pub local_idle_unload_minutes: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalModelDto {
+    pub id: String,
+    pub name: String,
+    pub path: String,
+    pub managed: bool,
+    pub size_bytes: Option<i64>,
+    pub arch: Option<String>,
+    pub n_ctx_train: Option<i64>,
+    pub added_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalEngineStatusDto {
+    pub state: String,
+    pub model_id: Option<String>,
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

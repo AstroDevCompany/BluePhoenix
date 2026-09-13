@@ -2211,3 +2211,38 @@ html[data-reduced-motion="true"]::view-transition-new(*) {
   max-height: 240px;
   font-size: 12px;
 }
+
+.provider-switch {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.local-model-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.local-model-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.local-model-row.is-active {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+
+.local-model-path {
+  word-break: break-all;
+  font-size: 12px;
+}
+
+.danger-text {
+  color: #ff8d8d;
+}

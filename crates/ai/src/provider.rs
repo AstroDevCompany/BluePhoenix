@@ -52,6 +52,12 @@ pub struct CompletionResponse {
 #[async_trait]
 pub trait AiProvider: Send + Sync {
     async fn complete(&self, request: CompletionRequest) -> AiResult<CompletionResponse>;
+
+    async fn stream(
+        &self,
+        request: CompletionRequest,
+        on_delta: &mut (dyn FnMut(String) + Send),
+    ) -> AiResult<CompletionResponse>;
 }
 
 pub fn classify_http(status: u16, body: &str) -> AiFailureKind {

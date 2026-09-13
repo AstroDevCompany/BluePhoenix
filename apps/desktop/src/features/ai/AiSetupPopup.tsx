@@ -3,6 +3,7 @@ import { api, formatError } from "../../lib/ipc";
 import { useUi } from "../../stores/ui";
 import type { AiStatus } from "../../lib/types";
 import { Overlay } from "../../components/ui/Overlay";
+import { settingsPayload } from "./settingsPayload";
 
 export function AiSetupPopup() {
   const toast = useUi((s) => s.showToast);
@@ -20,12 +21,7 @@ export function AiSetupPopup() {
   if (!open || !status) return null;
 
   const dismiss = async () => {
-    await api.aiSaveSettings({
-      enabled: status.enabled,
-      models: status.models,
-      commitFollowStyle: status.commitFollowStyle,
-      setupDismissed: true,
-    });
+    await api.aiSaveSettings(settingsPayload(status, { setupDismissed: true }));
     setOpen(false);
   };
 
@@ -33,7 +29,7 @@ export function AiSetupPopup() {
     <Overlay>
       <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="ai-setup-title">
         <h2 className="h2" id="ai-setup-title">Optional AI</h2>
-        <p className="muted">Add an OpenRouter key for chat, search interpretation, and software helpers. You can skip this and use BluePhoenix as usual.</p>
+        <p className="muted">Add an OpenRouter key for chat, search interpretation, and software helpers — or skip this and import a local GGUF model later in Settings → AI. You can keep using BluePhoenix without either.</p>
         <label className="field">
           <span className="label">OpenRouter API key</span>
           <input className="input" type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="sk-or-…" />

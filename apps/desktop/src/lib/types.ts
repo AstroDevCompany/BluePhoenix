@@ -128,6 +128,25 @@ export type Settings = {
   onboardingComplete: boolean;
 };
 
+export type AiProviderKind = "openrouter" | "local";
+
+export type LocalModel = {
+  id: string;
+  name: string;
+  path: string;
+  managed: boolean;
+  sizeBytes?: number | null;
+  arch?: string | null;
+  nCtxTrain?: number | null;
+  addedAt: string;
+};
+
+export type LocalEngineStatus = {
+  state: "unloaded" | "loading" | "ready" | "busy" | "error" | string;
+  modelId?: string | null;
+  error?: string | null;
+};
+
 export type AiStatus = {
   enabled: boolean;
   hasKey: boolean;
@@ -137,6 +156,13 @@ export type AiStatus = {
   setupDismissed: boolean;
   signedIn: boolean;
   cloudSecret: boolean;
+  provider: AiProviderKind;
+  localModelId?: string | null;
+  localModels: LocalModel[];
+  localEngine: LocalEngineStatus;
+  localCtxLen: number;
+  localGpuOffload: boolean;
+  localIdleUnloadMinutes: number;
 };
 
 export type AiSettingsPayload = {
@@ -144,6 +170,11 @@ export type AiSettingsPayload = {
   models: string[];
   commitFollowStyle: boolean;
   setupDismissed: boolean;
+  provider: AiProviderKind;
+  localModelId?: string | null;
+  localCtxLen: number;
+  localGpuOffload: boolean;
+  localIdleUnloadMinutes: number;
 };
 
 export type AiMessage = {

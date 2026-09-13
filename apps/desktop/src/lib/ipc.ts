@@ -67,6 +67,7 @@ export const api = {
   openTerminal: (folder: string) => invoke("open_terminal", { folder }),
   pickFolder: () => invoke<string | null>("pick_folder"),
   pickFile: () => invoke<string | null>("pick_file"),
+  pickGgufFile: () => invoke<string | null>("pick_gguf_file"),
   listProjectFiles: (projectId: string) => invoke("list_project_files", { projectId }),
   addProjectFile: (payload: Record<string, unknown>) => invoke("add_project_file", payload),
   removeProjectFile: (id: string) => invoke("remove_project_file", { id }),
@@ -94,6 +95,10 @@ export const api = {
   aiClearKey: () => invoke<AiStatus>("ai_clear_key"),
   aiRevealKey: () => invoke<{ key: string }>("ai_reveal_key"),
   aiTestConnection: () => invoke<{ ok: boolean; model: string; fallbackUsed: boolean; text: string }>("ai_test_connection"),
+  localModelImport: (path: string, copy: boolean) => invoke<AiStatus>("local_model_import", { input: { path, copy } }),
+  localModelRemove: (id: string, deleteFile: boolean) =>
+    invoke<AiStatus>("local_model_remove", { input: { id, deleteFile } }),
+  localModelUnload: () => invoke<AiStatus>("local_model_unload"),
   aiChatStream: (input: { conversationId?: string | null; projectId?: string; message: string }) =>
     invoke<AiMessage>("ai_chat_stream", { input }),
   aiListConversations: (projectId?: string) =>

@@ -15,7 +15,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 bluephoenix-domain.workspace = true
 bluephoenix-sync-protocol.workspace = true
-bluephoenix-ai.workspace = true
+bluephoenix-ai = { workspace = true, features = ["local-llm"] }
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
@@ -58,3 +58,4 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
   "NSWindow",
 ] }
 objc2-foundation = { version = "0.3", default-features = false, features = ["NSGeometry"] }
+llama-cpp-2 = { version = "0.1", default-features = false, features = ["common", "metal"] }

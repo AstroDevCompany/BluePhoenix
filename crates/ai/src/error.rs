@@ -36,6 +36,8 @@ pub enum AiError {
     MissingKey,
     #[error("No models are configured")]
     NoModels,
+    #[error("No local model is selected")]
+    NoLocalModel,
     #[error("{kind:?}: {message}")]
     Provider {
         kind: AiFailureKind,
@@ -74,6 +76,7 @@ impl AiError {
             Self::Disabled => "AI features are turned off in Settings.".into(),
             Self::MissingKey => "Add an OpenRouter API key in Settings → AI.".into(),
             Self::NoModels => "Configure at least one OpenRouter model identifier.".into(),
+            Self::NoLocalModel => "Add and select a local GGUF model in Settings → AI.".into(),
             Self::Provider {
                 kind,
                 message,

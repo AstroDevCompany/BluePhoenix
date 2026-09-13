@@ -768,6 +768,20 @@ pub async fn pick_file(app: AppHandle) -> AppResult<Option<String>> {
 }
 
 #[tauri::command]
+pub async fn pick_gguf_file(app: AppHandle) -> AppResult<Option<String>> {
+    use tauri_plugin_dialog::DialogExt;
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog()
+        .file()
+        .set_title("Choose a GGUF model")
+        .add_filter("GGUF model", &["gguf"])
+        .pick_file(move |file| {
+            let _ = tx.send(file);
+        });
+    Ok(rx.await.ok().flatten().and_then(file_path_to_string))
+}
+
+#[tauri::command]
 pub fn enqueue_index_job(state: State<AppState>, project_id: String) -> AppResult<String> {
     state.db.with(|c| {
         db::enqueue_job(

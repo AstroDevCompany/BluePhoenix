@@ -4,6 +4,8 @@ mod compat;
 pub mod documents;
 pub mod error;
 pub mod fallback;
+#[cfg(feature = "local-llm")]
+pub mod local;
 pub mod openrouter;
 pub mod parsers;
 pub mod prompts;
@@ -14,21 +16,20 @@ pub mod settings;
 
 pub use documents::{chunk_sections, system_prompt, DocumentChunk};
 pub use error::{AiError, AiFailureKind, AiResult, AttemptRecord};
-pub use fallback::{complete_with_fallback, FallbackOutcome};
-pub use openrouter::{
-    parse_completion, parse_sse_delta, stream_with_fallback, OpenRouterProvider, OPENROUTER_URL,
-};
+pub use fallback::{complete_with_fallback, stream_with_fallback, FallbackOutcome};
+pub use openrouter::{parse_completion, parse_sse_delta, OpenRouterProvider, OPENROUTER_URL};
 pub use parsers::{parse_document, semantic_chunks, DocumentParser, ParsedDocument};
 pub use provider::{redact, AiProvider, ChatMessage, CompletionRequest, CompletionResponse};
 pub use readiness::{looks_like_sentence, require_ready};
 pub use schema::{
-    parse_agent_prompt, parse_changelog, parse_commit, parse_command_scan, parse_prioritize,
+    parse_agent_prompt, parse_changelog, parse_command_scan, parse_commit, parse_prioritize,
     parse_search, parse_software_folder_draft, parse_todos, requested_inspect_files, AgentPrompt,
     ChangelogDraft, CommandProposal, CommitSuggestion, PrioritizeResult, SearchInterpretation,
     SoftwareFolderDraft, TodoOrderItem, TodoProposal,
 };
 pub use settings::{
-    AiSettings, ACTIVE_FALLBACK_SLOTS, MAX_MODEL_SLOTS, OPENROUTER_SECRET_KIND, SETTINGS_NAMESPACE,
+    AiProviderKind, AiSettings, ACTIVE_FALLBACK_SLOTS, DEFAULT_LOCAL_CTX_LEN, MAX_MODEL_SLOTS,
+    OPENROUTER_SECRET_KIND, SETTINGS_NAMESPACE,
 };
 
 pub const JOB_INDEX_FILES: &str = "index_files";

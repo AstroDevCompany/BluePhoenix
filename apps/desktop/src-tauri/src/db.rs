@@ -143,6 +143,11 @@ fn seed_settings(conn: &Connection) -> AppResult<()> {
         ("ai.models", "[\"\",\"\",\"\",\"\"]"),
         ("ai.commitFollowStyle", "true"),
         ("ai.setupDismissed", "false"),
+        ("ai.provider", "openrouter"),
+        ("ai.localModelId", ""),
+        ("ai.localCtxLen", "8192"),
+        ("ai.localGpuOffload", "true"),
+        ("ai.localIdleUnloadMinutes", "0"),
     ];
     for (key, value) in defaults {
         conn.execute(

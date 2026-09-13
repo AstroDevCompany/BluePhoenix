@@ -4,13 +4,17 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+default = []
+local-llm = ["dep:llama-cpp-2", "dep:encoding_rs"]
+
 [dependencies]
 bluephoenix-domain.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
-tokio = { version = "1", features = ["macros", "rt", "time"] }
+tokio = { version = "1", features = ["macros", "rt", "time", "sync"] }
 futures-util = "0.3"
 async-trait = "0.1"
 pdf-extract = "0.9"
@@ -18,3 +22,5 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 quick-xml = "0.37"
 scraper = "0.23"
 pulldown-cmark = { version = "0.13", default-features = false }
+llama-cpp-2 = { version = "0.1", default-features = false, features = ["common"], optional = true }
+encoding_rs = { version = "0.8", optional = true }

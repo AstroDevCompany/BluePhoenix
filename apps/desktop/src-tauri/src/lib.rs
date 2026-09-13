@@ -49,11 +49,19 @@ pub fn run() {
             }
             let dir = data_dir().expect("data dir");
             let db = Db::open(&dir.join("bluephoenix.sqlite")).expect("open sqlite");
+            let local_llm = bluephoenix_ai::local::LocalEngine::new();
+            if let Ok(settings) = db.with(|c| Ok(crate::ai_store::load_ai_settings(c))) {
+                local_llm.set_idle_unload(settings.local_idle_unload_minutes);
+            }
             let http = reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(20))
                 .build()
                 .expect("http");
-            app.manage(AppState { db, http });
+            app.manage(AppState {
+                db,
+                http,
+                local_llm,
+            });
             crate::secrets::init(&dir);
             crate::jobs::spawn(app.handle().clone());
             #[cfg(desktop)]
@@ -190,6 +198,7 @@ pub fn run() {
             commands::local_version,
             commands::pick_folder,
             commands::pick_file,
+            commands::pick_gguf_file,
             commands::enqueue_index_job,
             commands::poll_jobs,
             commands::store_encrypted_secret,
@@ -199,6 +208,9 @@ pub fn run() {
             ai::ai_clear_key,
             ai::ai_reveal_key,
             ai::ai_test_connection,
+            ai::local_model_import,
+            ai::local_model_remove,
+            ai::local_model_unload,
             ai::ai_chat_stream,
             ai::ai_list_conversations,
             ai::ai_list_messages,

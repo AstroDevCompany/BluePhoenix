@@ -470,3 +470,14 @@ CREATE VIRTUAL TABLE IF NOT EXISTS document_chunks_fts USING fts5(
   text,
   tokenize = 'porter'
 );
+
+CREATE TABLE IF NOT EXISTS local_models (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  path TEXT NOT NULL UNIQUE,
+  managed INTEGER NOT NULL DEFAULT 0,
+  size_bytes INTEGER,
+  arch TEXT,
+  n_ctx_train INTEGER,
+  added_at TEXT NOT NULL
+);

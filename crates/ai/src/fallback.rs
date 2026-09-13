@@ -9,8 +9,8 @@ pub struct FallbackOutcome {
     pub fallback_used: bool,
 }
 
-pub async fn complete_with_fallback<P: AiProvider>(
-    provider: &P,
+pub async fn complete_with_fallback(
+    provider: &dyn AiProvider,
     models: &[String],
     mut request: CompletionRequest,
 ) -> AiResult<FallbackOutcome> {
@@ -51,6 +51,57 @@ pub async fn complete_with_fallback<P: AiProvider>(
     Err(AiError::AllFailed { attempts })
 }
 
+pub async fn stream_with_fallback(
+    provider: &dyn AiProvider,
+    models: &[String],
+    mut request: CompletionRequest,
+    mut on_delta: impl FnMut(&str) + Send,
+) -> AiResult<FallbackOutcome> {
+    if models.is_empty() {
+        return Err(AiError::NoModels);
+    }
+    let mut attempts = Vec::new();
+    for (index, model) in models.iter().take(MAX_MODEL_SLOTS).enumerate() {
+        request.model = model.clone();
+        let mut got_token = false;
+        let mut wrapped = |delta: String| {
+            if !delta.is_empty() {
+                got_token = true;
+            }
+            on_delta(&delta);
+        };
+        let result = provider.stream(request.clone(), &mut wrapped).await;
+        match result {
+            Ok(response) => {
+                return Ok(FallbackOutcome {
+                    fallback_used: index > 0,
+                    attempted: {
+                        let mut used: Vec<String> = attempts
+                            .iter()
+                            .map(|a: &AttemptRecord| a.model.clone())
+                            .collect();
+                        used.push(model.clone());
+                        used
+                    },
+                    response,
+                });
+            }
+            Err(err) => {
+                let kind = err.kind().unwrap_or(AiFailureKind::Other);
+                attempts.push(AttemptRecord {
+                    model: model.clone(),
+                    kind,
+                    message: err.user_message(),
+                });
+                if got_token || !kind.should_fallback() {
+                    return Err(err);
+                }
+            }
+        }
+    }
+    Err(AiError::AllFailed { attempts })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -70,6 +121,18 @@ mod tests {
                 r.model = request.model;
                 r
             })
+        }
+
+        async fn stream(
+            &self,
+            request: CompletionRequest,
+            on_delta: &mut (dyn FnMut(String) + Send),
+        ) -> AiResult<CompletionResponse> {
+            let response = self.complete(request).await?;
+            if !response.text.is_empty() {
+                on_delta(response.text.clone());
+            }
+            Ok(response)
         }
     }
 

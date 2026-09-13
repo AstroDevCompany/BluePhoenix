@@ -1,6 +1,6 @@
 use crate::error::{AppError, AppResult};
 use crate::models::*;
-use bluephoenix_ai::settings::AiSettings;
+use bluephoenix_ai::settings::{AiProviderKind, AiSettings};
 use bluephoenix_ai::{MAX_MODEL_SLOTS, OPENROUTER_SECRET_KIND};
 use bluephoenix_domain::context::{
     AiActivitySlice, AiExamSlice, AiLinkSlice, AiProjectBundle, AiTodoSlice, AiTopicSlice,
@@ -34,11 +34,25 @@ fn set_setting(conn: &Connection, key: &str, value: &str) -> AppResult<()> {
 pub fn load_ai_settings(conn: &Connection) -> AiSettings {
     let models: Vec<String> =
         serde_json::from_str(&setting(conn, "ai.models", "[]")).unwrap_or_default();
+    let local_id = setting(conn, "ai.localModelId", "");
     AiSettings {
         enabled: setting(conn, "ai.enabled", "true") != "false",
         models,
         commit_follow_style: setting(conn, "ai.commitFollowStyle", "true") != "false",
         setup_dismissed: setting(conn, "ai.setupDismissed", "false") == "true",
+        provider: AiProviderKind::parse(&setting(conn, "ai.provider", "openrouter")),
+        local_model_id: if local_id.trim().is_empty() {
+            None
+        } else {
+            Some(local_id)
+        },
+        local_ctx_len: setting(conn, "ai.localCtxLen", "8192")
+            .parse()
+            .unwrap_or(8192),
+        local_gpu_offload: setting(conn, "ai.localGpuOffload", "true") != "false",
+        local_idle_unload_minutes: setting(conn, "ai.localIdleUnloadMinutes", "0")
+            .parse()
+            .unwrap_or(0),
     }
     .normalize()
 }
@@ -73,7 +87,108 @@ pub fn save_ai_settings(conn: &Connection, settings: &AiSettings) -> AppResult<A
             "false"
         },
     )?;
+    set_setting(conn, "ai.provider", settings.provider.as_str())?;
+    set_setting(
+        conn,
+        "ai.localModelId",
+        settings.local_model_id.as_deref().unwrap_or(""),
+    )?;
+    set_setting(conn, "ai.localCtxLen", &settings.local_ctx_len.to_string())?;
+    set_setting(
+        conn,
+        "ai.localGpuOffload",
+        if settings.local_gpu_offload {
+            "true"
+        } else {
+            "false"
+        },
+    )?;
+    set_setting(
+        conn,
+        "ai.localIdleUnloadMinutes",
+        &settings.local_idle_unload_minutes.to_string(),
+    )?;
     Ok(settings)
+}
+
+fn map_local_model(r: &rusqlite::Row<'_>) -> rusqlite::Result<LocalModelDto> {
+    Ok(LocalModelDto {
+        id: r.get(0)?,
+        name: r.get(1)?,
+        path: r.get(2)?,
+        managed: r.get::<_, i64>(3)? != 0,
+        size_bytes: r.get(4)?,
+        arch: r.get(5)?,
+        n_ctx_train: r.get(6)?,
+        added_at: r.get(7)?,
+    })
+}
+
+pub fn list_local_models(conn: &Connection) -> AppResult<Vec<LocalModelDto>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, name, path, managed, size_bytes, arch, n_ctx_train, added_at
+         FROM local_models ORDER BY added_at ASC",
+    )?;
+    let rows = stmt.query_map([], map_local_model)?;
+    Ok(rows.filter_map(|r| r.ok()).collect())
+}
+
+pub fn get_local_model(conn: &Connection, id: &str) -> AppResult<Option<LocalModelDto>> {
+    conn.query_row(
+        "SELECT id, name, path, managed, size_bytes, arch, n_ctx_train, added_at
+         FROM local_models WHERE id=?1",
+        [id],
+        map_local_model,
+    )
+    .optional()
+    .map_err(Into::into)
+}
+
+pub fn find_local_model_by_path(conn: &Connection, path: &str) -> AppResult<Option<LocalModelDto>> {
+    conn.query_row(
+        "SELECT id, name, path, managed, size_bytes, arch, n_ctx_train, added_at
+         FROM local_models WHERE path=?1",
+        [path],
+        map_local_model,
+    )
+    .optional()
+    .map_err(Into::into)
+}
+
+pub fn insert_local_model(
+    conn: &Connection,
+    name: &str,
+    path: &str,
+    managed: bool,
+    size_bytes: Option<i64>,
+    arch: Option<&str>,
+    n_ctx_train: Option<i64>,
+) -> AppResult<LocalModelDto> {
+    let id = new_id();
+    let added_at = now();
+    conn.execute(
+        "INSERT INTO local_models(id, name, path, managed, size_bytes, arch, n_ctx_train, added_at)
+         VALUES(?1,?2,?3,?4,?5,?6,?7,?8)",
+        params![
+            id,
+            name,
+            path,
+            if managed { 1 } else { 0 },
+            size_bytes,
+            arch,
+            n_ctx_train,
+            added_at
+        ],
+    )?;
+    get_local_model(conn, &id)?.ok_or_else(|| AppError::msg("Local model missing after save"))
+}
+
+pub fn delete_local_model(conn: &Connection, id: &str) -> AppResult<Option<LocalModelDto>> {
+    let row = get_local_model(conn, id)?;
+    if row.is_some() {
+        conn.execute("DELETE FROM local_models WHERE id=?1", [id])?;
+    }
+    Ok(row)
 }
 
 pub fn set_account_email(conn: &Connection, email: &str) -> AppResult<()> {

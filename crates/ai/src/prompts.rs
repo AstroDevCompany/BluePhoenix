@@ -254,7 +254,11 @@ mod tests {
 
     #[test]
     fn scan_commands_prompt_forbids_inventing_and_shell() {
-        let prompt = scan_commands_prompt("Tree:\nCargo.toml\n", "[{\"command\":\"cargo test\"}]", "[]");
+        let prompt = scan_commands_prompt(
+            "Tree:\nCargo.toml\n",
+            "[{\"command\":\"cargo test\"}]",
+            "[]",
+        );
         assert!(prompt.contains("Do not invent scripts"));
         assert!(prompt.contains("no &&"));
         assert!(prompt.contains("hypothesized"));

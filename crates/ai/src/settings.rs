@@ -4,6 +4,33 @@ pub const SETTINGS_NAMESPACE: &str = "ai";
 pub const OPENROUTER_SECRET_KIND: &str = "openrouter_api_key";
 pub const MAX_MODEL_SLOTS: usize = 4;
 pub const ACTIVE_FALLBACK_SLOTS: usize = MAX_MODEL_SLOTS;
+pub const DEFAULT_LOCAL_CTX_LEN: u32 = 8192;
+pub const MIN_LOCAL_CTX_LEN: u32 = 512;
+pub const MAX_LOCAL_CTX_LEN: u32 = 131_072;
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum AiProviderKind {
+    #[default]
+    OpenRouter,
+    Local,
+}
+
+impl AiProviderKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::OpenRouter => "openrouter",
+            Self::Local => "local",
+        }
+    }
+
+    pub fn parse(value: &str) -> Self {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "local" => Self::Local,
+            _ => Self::OpenRouter,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -12,6 +39,24 @@ pub struct AiSettings {
     pub models: Vec<String>,
     pub commit_follow_style: bool,
     pub setup_dismissed: bool,
+    #[serde(default)]
+    pub provider: AiProviderKind,
+    #[serde(default)]
+    pub local_model_id: Option<String>,
+    #[serde(default = "default_local_ctx_len")]
+    pub local_ctx_len: u32,
+    #[serde(default = "default_true")]
+    pub local_gpu_offload: bool,
+    #[serde(default)]
+    pub local_idle_unload_minutes: u32,
+}
+
+fn default_local_ctx_len() -> u32 {
+    DEFAULT_LOCAL_CTX_LEN
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Default for AiSettings {
@@ -21,6 +66,11 @@ impl Default for AiSettings {
             models: vec![String::new(); MAX_MODEL_SLOTS],
             commit_follow_style: true,
             setup_dismissed: false,
+            provider: AiProviderKind::OpenRouter,
+            local_model_id: None,
+            local_ctx_len: DEFAULT_LOCAL_CTX_LEN,
+            local_gpu_offload: true,
+            local_idle_unload_minutes: 0,
         }
     }
 }
@@ -32,6 +82,15 @@ impl AiSettings {
         for slot in &mut self.models {
             *slot = slot.trim().to_string();
         }
+        self.local_model_id = self
+            .local_model_id
+            .take()
+            .map(|id| id.trim().to_string())
+            .filter(|id| !id.is_empty());
+        self.local_ctx_len = self
+            .local_ctx_len
+            .clamp(MIN_LOCAL_CTX_LEN, MAX_LOCAL_CTX_LEN);
+        self.local_idle_unload_minutes = self.local_idle_unload_minutes.min(24 * 60);
         self
     }
 
@@ -69,5 +128,21 @@ mod tests {
         s = s.normalize();
         assert_eq!(s.models.len(), 4);
         assert_eq!(s.active_models(), vec!["a", "b", "c", "d"]);
+    }
+
+    #[test]
+    fn defaults_to_openrouter() {
+        let s = AiSettings::default();
+        assert_eq!(s.provider, AiProviderKind::OpenRouter);
+        assert!(s.local_gpu_offload);
+        assert_eq!(s.local_ctx_len, DEFAULT_LOCAL_CTX_LEN);
+    }
+
+    #[test]
+    fn blank_local_id_becomes_none() {
+        let mut s = AiSettings::default();
+        s.local_model_id = Some("  ".into());
+        s = s.normalize();
+        assert!(s.local_model_id.is_none());
     }
 }

@@ -2,33 +2,74 @@ use crate::ai_store;
 use crate::db;
 use crate::error::{AppError, AppResult};
 use crate::models::*;
+use crate::native;
 use crate::secrets;
 use crate::state::AppState;
+use bluephoenix_ai::local::{
+    default_thread_count, inspect_gguf, LocalEngine, LocalLlamaProvider, LocalModelSpec,
+};
 use bluephoenix_ai::prompts;
-use bluephoenix_ai::settings::AiSettings;
+use bluephoenix_ai::settings::{AiProviderKind, AiSettings};
 use bluephoenix_ai::{
-    complete_with_fallback, parse_agent_prompt, parse_changelog, parse_commit, parse_command_scan,
+    complete_with_fallback, parse_agent_prompt, parse_changelog, parse_command_scan, parse_commit,
     parse_prioritize, parse_search, parse_software_folder_draft, parse_todos,
-    requested_inspect_files, require_ready, stream_with_fallback, ChatMessage, CommandProposal,
-    CompletionRequest, OpenRouterProvider, OPENROUTER_SECRET_KIND,
+    requested_inspect_files, require_ready, stream_with_fallback, AiProvider, ChatMessage,
+    CommandProposal, CompletionRequest, OpenRouterProvider, OPENROUTER_SECRET_KIND,
 };
 use bluephoenix_domain::commands_safety::is_dangerous;
 use bluephoenix_domain::ids::CategoryKind;
 use serde::Deserialize;
 use serde_json::json;
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter, State};
 
 fn map_ai(err: bluephoenix_ai::AiError) -> AppError {
     AppError::msg(err.user_message())
 }
 
-fn load_ready(state: &AppState) -> AppResult<(OpenRouterProvider, AiSettings, Vec<String>)> {
+fn engine_status(engine: &LocalEngine) -> LocalEngineStatusDto {
+    let state = engine.state();
+    LocalEngineStatusDto {
+        state: state.label().into(),
+        model_id: state.model_id().map(|s| s.to_string()),
+        error: state.error().map(|s| s.to_string()),
+    }
+}
+
+fn load_ready(state: &AppState) -> AppResult<(Box<dyn AiProvider>, AiSettings, Vec<String>)> {
     let settings = state.db.with(|c| Ok(ai_store::load_ai_settings(c)))?;
-    let key =
-        secrets::openrouter_key().ok_or_else(|| map_ai(bluephoenix_ai::AiError::MissingKey))?;
-    require_ready(&settings, true).map_err(map_ai)?;
-    let models = settings.active_models();
-    Ok((OpenRouterProvider::new(key), settings, models))
+    match settings.provider {
+        AiProviderKind::Local => {
+            require_ready(&settings, secrets::has_openrouter_key()).map_err(map_ai)?;
+            let id = settings
+                .local_model_id
+                .clone()
+                .ok_or_else(|| map_ai(bluephoenix_ai::AiError::NoLocalModel))?;
+            let model = state
+                .db
+                .with(|c| ai_store::get_local_model(c, &id))?
+                .ok_or_else(|| AppError::msg("Selected local model is missing"))?;
+            let spec = LocalModelSpec {
+                id: model.id,
+                name: model.name.clone(),
+                path: model.path,
+                ctx_len: settings.local_ctx_len,
+                gpu_layers: if settings.local_gpu_offload { 1000 } else { 0 },
+                threads: default_thread_count(),
+            };
+            let display = spec.name.clone();
+            let provider = LocalLlamaProvider::new(state.local_llm.clone(), spec);
+            Ok((Box::new(provider), settings, vec![display]))
+        }
+        AiProviderKind::OpenRouter => {
+            let key = secrets::openrouter_key()
+                .ok_or_else(|| map_ai(bluephoenix_ai::AiError::MissingKey))?;
+            require_ready(&settings, true).map_err(map_ai)?;
+            let models = settings.active_models();
+            Ok((Box::new(OpenRouterProvider::new(key)), settings, models))
+        }
+    }
 }
 
 async fn complete_text(
@@ -42,7 +83,7 @@ async fn complete_text(
     } else {
         CompletionRequest::chat(models.first().cloned().unwrap_or_default(), messages)
     };
-    complete_with_fallback(&provider, &models, request)
+    complete_with_fallback(&*provider, &models, request)
         .await
         .map_err(map_ai)
 }
@@ -91,12 +132,13 @@ pub fn try_unwrap_with_stored_key(state: &AppState) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub fn ai_status(state: State<AppState>) -> AppResult<AiStatusDto> {
+fn read_ai_status(state: &AppState) -> AppResult<AiStatusDto> {
     let settings = state.db.with(|c| Ok(ai_store::load_ai_settings(c)))?;
     let key = secrets::openrouter_key();
     let cloud = state
         .db
         .with(|c| Ok(ai_store::load_openrouter_envelope(c).is_some()))?;
+    let local_models = state.db.with(ai_store::list_local_models)?;
     Ok(AiStatusDto {
         enabled: settings.enabled,
         has_key: key.is_some(),
@@ -106,12 +148,38 @@ pub fn ai_status(state: State<AppState>) -> AppResult<AiStatusDto> {
         setup_dismissed: settings.setup_dismissed,
         signed_in: secrets::wrap_key_available() || secrets::keyring_get("access_token").is_some(),
         cloud_secret: cloud,
+        provider: settings.provider.as_str().into(),
+        local_model_id: settings.local_model_id,
+        local_models,
+        local_engine: engine_status(&state.local_llm),
+        local_ctx_len: settings.local_ctx_len,
+        local_gpu_offload: settings.local_gpu_offload,
+        local_idle_unload_minutes: settings.local_idle_unload_minutes,
     })
 }
 
 #[tauri::command]
+pub fn ai_status(state: State<AppState>) -> AppResult<AiStatusDto> {
+    read_ai_status(&state)
+}
+
+#[tauri::command]
 pub fn ai_save_settings(state: State<AppState>, settings: AiSettings) -> AppResult<AiSettings> {
-    state.db.with(|c| ai_store::save_ai_settings(c, &settings))
+    let before = state.db.with(|c| Ok(ai_store::load_ai_settings(c)))?;
+    let saved = state
+        .db
+        .with(|c| ai_store::save_ai_settings(c, &settings))?;
+    state
+        .local_llm
+        .set_idle_unload(saved.local_idle_unload_minutes);
+    let reload = before.provider != saved.provider
+        || before.local_model_id != saved.local_model_id
+        || before.local_ctx_len != saved.local_ctx_len
+        || before.local_gpu_offload != saved.local_gpu_offload;
+    if reload {
+        state.local_llm.unload();
+    }
+    Ok(saved)
 }
 
 #[tauri::command]
@@ -127,13 +195,13 @@ pub fn ai_set_key(state: State<AppState>, key: String) -> AppResult<AiStatusDto>
     }
     secrets::keyring_set(secrets::OPENROUTER_KEY, &key)?;
     persist_openrouter_envelope(&state, &key)?;
-    ai_status(state)
+    read_ai_status(&state)
 }
 
 #[tauri::command]
 pub fn ai_clear_key(state: State<AppState>) -> AppResult<AiStatusDto> {
     secrets::keyring_delete(secrets::OPENROUTER_KEY);
-    ai_status(state)
+    read_ai_status(&state)
 }
 
 #[tauri::command]
@@ -165,6 +233,161 @@ pub async fn ai_test_connection(state: State<'_, AppState>) -> AppResult<serde_j
         "fallbackUsed": outcome.fallback_used,
         "text": outcome.response.text.trim(),
     }))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalModelImportInput {
+    pub path: String,
+    pub copy: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalModelRemoveInput {
+    pub id: String,
+    pub delete_file: bool,
+}
+
+fn is_gguf_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.eq_ignore_ascii_case("gguf"))
+        .unwrap_or(false)
+}
+
+fn unique_copy_dest(dir: &Path, file_name: &str) -> PathBuf {
+    let dest = dir.join(file_name);
+    if !dest.exists() {
+        return dest;
+    }
+    let stem = Path::new(file_name)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("model");
+    for i in 2..10_000 {
+        let candidate = dir.join(format!("{stem}-{i}.gguf"));
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+    dir.join(format!(
+        "{stem}-{}.gguf",
+        chrono::Utc::now().timestamp_millis()
+    ))
+}
+
+fn copy_with_progress(app: &AppHandle, src: &Path, dest: &Path) -> AppResult<u64> {
+    let total = std::fs::metadata(src)?.len();
+    let mut reader = std::fs::File::open(src)?;
+    let mut writer = std::fs::File::create(dest)?;
+    let mut buf = vec![0u8; 1024 * 1024];
+    let mut copied = 0u64;
+    loop {
+        let n = reader.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        writer.write_all(&buf[..n])?;
+        copied += n as u64;
+        let _ = app.emit(
+            "local-model-import-progress",
+            json!({ "bytes": copied, "total": total }),
+        );
+    }
+    writer.sync_all()?;
+    Ok(copied)
+}
+
+#[tauri::command]
+pub async fn local_model_import(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: LocalModelImportInput,
+) -> AppResult<AiStatusDto> {
+    let src = PathBuf::from(input.path.trim());
+    if !src.is_file() {
+        return Err(AppError::msg("Choose a GGUF file to import"));
+    }
+    if !is_gguf_path(&src) {
+        return Err(AppError::msg("Only .gguf model files can be imported"));
+    }
+    let info = inspect_gguf(&src).map_err(map_ai)?;
+    let stored_path = if input.copy {
+        let dir = native::models_dir()?;
+        let file_name = src
+            .file_name()
+            .and_then(|n| n.to_str())
+            .ok_or_else(|| AppError::msg("Invalid model file name"))?;
+        let dest = unique_copy_dest(&dir, file_name);
+        let dest_clone = dest.clone();
+        let src_clone = src.clone();
+        let app_clone = app.clone();
+        tokio::task::spawn_blocking(move || {
+            copy_with_progress(&app_clone, &src_clone, &dest_clone)
+        })
+        .await
+        .map_err(|err| AppError::msg(format!("Copy failed: {err}")))??;
+        dest
+    } else {
+        src.clone()
+    };
+    let path_str = stored_path.to_string_lossy().into_owned();
+    if state
+        .db
+        .with(|c| ai_store::find_local_model_by_path(c, &path_str))?
+        .is_some()
+    {
+        return Err(AppError::msg("This model is already in the list"));
+    }
+    let inserted = state.db.with(|c| {
+        ai_store::insert_local_model(
+            c,
+            &info.name,
+            &path_str,
+            input.copy,
+            Some(info.size_bytes as i64),
+            info.arch.as_deref(),
+            info.n_ctx_train.map(|n| n as i64),
+        )
+    })?;
+    let mut settings = state.db.with(|c| Ok(ai_store::load_ai_settings(c)))?;
+    if settings.local_model_id.is_none() {
+        settings.local_model_id = Some(inserted.id);
+        state
+            .db
+            .with(|c| ai_store::save_ai_settings(c, &settings))?;
+    }
+    read_ai_status(&state)
+}
+
+#[tauri::command]
+pub fn local_model_remove(
+    state: State<AppState>,
+    input: LocalModelRemoveInput,
+) -> AppResult<AiStatusDto> {
+    let removed = state
+        .db
+        .with(|c| ai_store::delete_local_model(c, &input.id))?
+        .ok_or_else(|| AppError::msg("Model not found"))?;
+    let mut settings = state.db.with(|c| Ok(ai_store::load_ai_settings(c)))?;
+    if settings.local_model_id.as_deref() == Some(removed.id.as_str()) {
+        settings.local_model_id = None;
+        state
+            .db
+            .with(|c| ai_store::save_ai_settings(c, &settings))?;
+        state.local_llm.unload();
+    }
+    if input.delete_file && removed.managed {
+        let _ = std::fs::remove_file(&removed.path);
+    }
+    read_ai_status(&state)
+}
+
+#[tauri::command]
+pub fn local_model_unload(state: State<AppState>) -> AppResult<AiStatusDto> {
+    state.local_llm.unload();
+    read_ai_status(&state)
 }
 
 #[derive(Deserialize)]
@@ -255,7 +478,7 @@ pub async fn ai_chat_stream(
     let cid = conversation_id.clone();
     let app_for_delta = app.clone();
     let request = CompletionRequest::chat(models.first().cloned().unwrap_or_default(), messages);
-    let outcome = stream_with_fallback(&provider, &models, request, move |delta| {
+    let outcome = stream_with_fallback(&*provider, &models, request, move |delta| {
         let _ = app_for_delta.emit(
             "ai-chat-delta",
             json!({ "conversationId": cid, "delta": delta }),

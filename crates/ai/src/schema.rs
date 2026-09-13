@@ -161,7 +161,11 @@ fn sanitize_command_proposals(list: Vec<CommandProposal>) -> Vec<CommandProposal
     list.into_iter()
         .filter_map(|mut item| {
             item.name = item.name.trim().to_string();
-            item.command = item.command.split_whitespace().collect::<Vec<_>>().join(" ");
+            item.command = item
+                .command
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ");
             item.description = item.description.trim().to_string();
             item.reasoning = item.reasoning.trim().to_string();
             if let Some(dir) = item.working_directory.take() {
@@ -174,7 +178,9 @@ fn sanitize_command_proposals(list: Vec<CommandProposal>) -> Vec<CommandProposal
                     item.working_directory = Some(cleaned);
                 }
             }
-            if item.name.is_empty() || item.command.is_empty() || has_disallowed_shell(&item.command)
+            if item.name.is_empty()
+                || item.command.is_empty()
+                || has_disallowed_shell(&item.command)
             {
                 return None;
             }
@@ -293,8 +299,10 @@ mod tests {
         assert_eq!(commands.len(), 1);
         assert_eq!(commands[0].command, "pnpm run dev");
         assert_eq!(commands[0].source, "found");
-        assert!(parse_command_scan("{\"commands\":[{\"name\":\"X\",\"command\":\"FOO=1 pnpm test\"}]}")
-            .unwrap()
-            .is_empty());
+        assert!(parse_command_scan(
+            "{\"commands\":[{\"name\":\"X\",\"command\":\"FOO=1 pnpm test\"}]}"
+        )
+        .unwrap()
+        .is_empty());
     }
 }

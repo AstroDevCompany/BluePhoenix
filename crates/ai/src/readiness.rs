@@ -1,15 +1,24 @@
 use crate::error::{AiError, AiResult};
-use crate::settings::AiSettings;
+use crate::settings::{AiProviderKind, AiSettings};
 
 pub fn require_ready(settings: &AiSettings, has_key: bool) -> AiResult<()> {
     if !settings.enabled {
         return Err(AiError::Disabled);
     }
-    if !has_key {
-        return Err(AiError::MissingKey);
-    }
-    if settings.active_models().is_empty() {
-        return Err(AiError::NoModels);
+    match settings.provider {
+        AiProviderKind::Local => {
+            if settings.local_model_id.is_none() {
+                return Err(AiError::NoLocalModel);
+            }
+        }
+        AiProviderKind::OpenRouter => {
+            if !has_key {
+                return Err(AiError::MissingKey);
+            }
+            if settings.active_models().is_empty() {
+                return Err(AiError::NoModels);
+            }
+        }
     }
     Ok(())
 }
@@ -37,5 +46,17 @@ mod extra_tests {
         assert!(looks_like_sentence("which course has an exam next week"));
         assert!(!looks_like_sentence("todo"));
         assert!(!looks_like_sentence("/settings"));
+    }
+
+    #[test]
+    fn local_skips_openrouter_key() {
+        let mut s = AiSettings::default();
+        s.provider = crate::settings::AiProviderKind::Local;
+        assert!(matches!(
+            require_ready(&s, false),
+            Err(AiError::NoLocalModel)
+        ));
+        s.local_model_id = Some("model-1".into());
+        assert!(require_ready(&s, false).is_ok());
     }
 }
