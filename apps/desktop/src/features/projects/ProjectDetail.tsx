@@ -222,7 +222,7 @@ export function ProjectDetail({ category, projectId }: { category: Category; pro
             <TodoList projectId={project.id} categoryId={category.id} todos={todos} onChange={reload} stage />
           ) : null}
 
-          {tab === "time" ? <TimeEntries projectId={project.id} onChanged={reload} stage /> : null}
+          {tab === "time" ? <TimeEntries projectId={project.id} topicId={topicId || undefined} onChanged={reload} stage /> : null}
 
           {tab === "topics" ? (
             <>
