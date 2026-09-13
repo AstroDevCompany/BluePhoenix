@@ -18,7 +18,12 @@ impl AiFailureKind {
     pub fn should_fallback(self) -> bool {
         matches!(
             self,
-            Self::Unavailable | Self::RateLimit | Self::Timeout | Self::Network | Self::Malformed | Self::Other
+            Self::Unavailable
+                | Self::RateLimit
+                | Self::Timeout
+                | Self::Network
+                | Self::Malformed
+                | Self::Other
         )
     }
 }
@@ -52,7 +57,11 @@ pub struct AttemptRecord {
 }
 
 impl AiError {
-    pub fn provider(kind: AiFailureKind, message: impl Into<String>, model: Option<String>) -> Self {
+    pub fn provider(
+        kind: AiFailureKind,
+        message: impl Into<String>,
+        model: Option<String>,
+    ) -> Self {
         Self::Provider {
             kind,
             message: message.into(),
@@ -65,16 +74,25 @@ impl AiError {
             Self::Disabled => "AI features are turned off in Settings.".into(),
             Self::MissingKey => "Add an OpenRouter API key in Settings → AI.".into(),
             Self::NoModels => "Configure at least one OpenRouter model identifier.".into(),
-            Self::Provider { kind, message, model } => {
+            Self::Provider {
+                kind,
+                message,
+                model,
+            } => {
                 let model = model.as_deref().unwrap_or("model");
                 match kind {
-                    AiFailureKind::Auth => "The OpenRouter API key was rejected. Check Settings → AI.".into(),
+                    AiFailureKind::Auth => {
+                        "The OpenRouter API key was rejected. Check Settings → AI.".into()
+                    }
                     AiFailureKind::Validation => format!("The request was rejected: {message}"),
                     _ => format!("{model}: {message}"),
                 }
             }
             Self::AllFailed { attempts } => {
-                let last = attempts.last().map(|a| a.message.as_str()).unwrap_or("unknown error");
+                let last = attempts
+                    .last()
+                    .map(|a| a.message.as_str())
+                    .unwrap_or("unknown error");
                 format!("All fallback models failed. Last error: {last}")
             }
             Self::Message(m) => m.clone(),

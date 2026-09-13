@@ -91,7 +91,7 @@ export const api = {
     invoke<AiSettingsPayload>("ai_save_settings", { settings }),
   aiSetKey: (key: string) => invoke<AiStatus>("ai_set_key", { key }),
   aiClearKey: () => invoke<AiStatus>("ai_clear_key"),
-  aiRevealKey: () => invoke<string>("ai_reveal_key"),
+  aiRevealKey: () => invoke<{ key: string }>("ai_reveal_key"),
   aiTestConnection: () => invoke<{ ok: boolean; model: string; fallbackUsed: boolean; text: string }>("ai_test_connection"),
   aiChatStream: (input: { conversationId?: string | null; projectId?: string; message: string }) =>
     invoke<AiMessage>("ai_chat_stream", { input }),

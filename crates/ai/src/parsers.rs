@@ -66,7 +66,9 @@ impl DocumentParser for MarkdownParser {
                     }
                     text.push_str(&t);
                 }
-                pulldown_cmark::Event::SoftBreak | pulldown_cmark::Event::HardBreak => text.push('\n'),
+                pulldown_cmark::Event::SoftBreak | pulldown_cmark::Event::HardBreak => {
+                    text.push('\n')
+                }
                 pulldown_cmark::Event::End(pulldown_cmark::TagEnd::Heading(_)) => {
                     if let Some(line) = text.lines().last() {
                         headings.push(line.trim().to_string());
@@ -169,7 +171,9 @@ impl DocumentParser for PdfParser {
                 headings: Vec::new(),
                 tables: Vec::new(),
                 parser: self.name().into(),
-                limitation: Some("PDF could not be parsed; original file is still available".into()),
+                limitation: Some(
+                    "PDF could not be parsed; original file is still available".into(),
+                ),
                 page_count: None,
             },
         }
@@ -198,7 +202,9 @@ impl DocumentParser for DocxParser {
                 headings: Vec::new(),
                 tables: Vec::new(),
                 parser: self.name().into(),
-                limitation: Some("DOCX could not be parsed; original file is still available".into()),
+                limitation: Some(
+                    "DOCX could not be parsed; original file is still available".into(),
+                ),
                 page_count: None,
             },
         }
@@ -266,12 +272,18 @@ pub fn parse_document(path: &Path, bytes: &[u8]) -> ParsedDocument {
         headings: Vec::new(),
         tables: Vec::new(),
         parser: "unsupported".into(),
-        limitation: Some("This file type is not indexed. The original file remains available.".into()),
+        limitation: Some(
+            "This file type is not indexed. The original file remains available.".into(),
+        ),
         page_count: None,
     }
 }
 
-pub fn semantic_chunks(parsed: &ParsedDocument, max_chars: usize, max_chunks: usize) -> Vec<(Option<String>, String)> {
+pub fn semantic_chunks(
+    parsed: &ParsedDocument,
+    max_chars: usize,
+    max_chunks: usize,
+) -> Vec<(Option<String>, String)> {
     let mut chunks = chunk_sections(&parsed.text, max_chars);
     if chunks.len() > max_chunks {
         chunks.truncate(max_chunks);

@@ -12,7 +12,10 @@ pub fn install(window: &WebviewWindow) {
     center(window);
     let win = window.clone();
     window.on_window_event(move |event| {
-        if matches!(event, WindowEvent::CloseRequested { .. } | WindowEvent::Destroyed) {
+        if matches!(
+            event,
+            WindowEvent::CloseRequested { .. } | WindowEvent::Destroyed
+        ) {
             return;
         }
         center(&win);
@@ -33,7 +36,8 @@ unsafe fn apply(ns_window: &NSWindow) {
     let Some(close) = ns_window.standardWindowButton(NSWindowButton::CloseButton) else {
         return;
     };
-    let Some(miniaturize) = ns_window.standardWindowButton(NSWindowButton::MiniaturizeButton) else {
+    let Some(miniaturize) = ns_window.standardWindowButton(NSWindowButton::MiniaturizeButton)
+    else {
         return;
     };
     let Some(zoom) = ns_window.standardWindowButton(NSWindowButton::ZoomButton) else {
@@ -61,9 +65,6 @@ unsafe fn apply(ns_window: &NSWindow) {
 
     let y = ((TITLEBAR_HEIGHT - button_height) / 2.0).max(0.0);
     for (index, button) in [close, miniaturize, zoom].iter().enumerate() {
-        button.setFrameOrigin(NSPoint::new(
-            TRAFFIC_LIGHT_X + index as f64 * gap,
-            y,
-        ));
+        button.setFrameOrigin(NSPoint::new(TRAFFIC_LIGHT_X + index as f64 * gap, y));
     }
 }

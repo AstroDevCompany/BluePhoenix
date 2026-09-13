@@ -65,13 +65,7 @@ mod tests {
     #[test]
     fn extra_slots_are_dropped() {
         let mut s = AiSettings::default();
-        s.models = vec![
-            "a".into(),
-            "b".into(),
-            "c".into(),
-            "d".into(),
-            "e".into(),
-        ];
+        s.models = vec!["a".into(), "b".into(), "c".into(), "d".into(), "e".into()];
         s = s.normalize();
         assert_eq!(s.models.len(), 4);
         assert_eq!(s.active_models(), vec!["a", "b", "c", "d"]);

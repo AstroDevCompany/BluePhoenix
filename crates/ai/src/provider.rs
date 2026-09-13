@@ -55,15 +55,23 @@ pub trait AiProvider: Send + Sync {
 }
 
 pub fn classify_http(status: u16, body: &str) -> AiFailureKind {
+    if matches!(status, 401 | 403) {
+        return AiFailureKind::Auth;
+    }
+    if status == 429 || crate::compat::looks_like_rate_limit(body) {
+        return AiFailureKind::RateLimit;
+    }
     match status {
-        401 | 403 => AiFailureKind::Auth,
         404 => AiFailureKind::Unavailable,
         408 => AiFailureKind::Timeout,
-        429 => AiFailureKind::RateLimit,
         400 | 422 => {
             let lower = body.to_lowercase();
             if lower.contains("api key") || lower.contains("unauthorized") {
                 AiFailureKind::Auth
+            } else if crate::compat::looks_like_provider_param_error(body) {
+                // Google/OpenRouter wrap unsupported JSON mode as 400 "Provider
+                // returned error". Treat as unavailable so the next fallback slot runs.
+                AiFailureKind::Unavailable
             } else {
                 AiFailureKind::Validation
             }
@@ -78,4 +86,33 @@ pub fn redact(value: &str) -> String {
         return "••••".into();
     }
     format!("{}…{}", &value[..4], &value[value.len() - 2..])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn json_mode_provider_error_is_unavailable() {
+        let body = r#"{"error":{"message":"Provider returned error","code":400,"metadata":{"raw":"JSON mode is not enabled"}}}"#;
+        assert_eq!(classify_http(400, body), AiFailureKind::Unavailable);
+    }
+
+    #[test]
+    fn generic_400_stays_validation() {
+        assert_eq!(
+            classify_http(
+                400,
+                r#"{"error":{"message":"max_tokens must be positive"}}"#
+            ),
+            AiFailureKind::Validation
+        );
+    }
+
+    #[test]
+    fn upstream_free_cap_is_rate_limit() {
+        let body = r#"{"error":{"message":"google/gemma-4-31b-it:free is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits: https://openrouter.ai/settings/integrations"}}"#;
+        assert_eq!(classify_http(429, body), AiFailureKind::RateLimit);
+        assert_eq!(classify_http(502, body), AiFailureKind::RateLimit);
+    }
 }

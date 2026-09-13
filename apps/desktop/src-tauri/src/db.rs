@@ -8,8 +8,8 @@ use bluephoenix_domain::context::{todo_matches, ProjectContext, TodoFilter};
 use bluephoenix_domain::exams::{self, ExamAttemptView};
 use bluephoenix_domain::gpa::{self, CourseGradeInput, GpaConfig};
 use bluephoenix_domain::ids::{
-    new_id, CategoryKind, ExamStatus, FITNESS_CATEGORY_ID, PERSONAL_CATEGORY_ID,
-    PHOTOGRAPHY_CATEGORY_ID, SOFTWARE_CATEGORY_ID, TagKind, UNIVERSITY_CATEGORY_ID,
+    new_id, CategoryKind, ExamStatus, TagKind, FITNESS_CATEGORY_ID, PERSONAL_CATEGORY_ID,
+    PHOTOGRAPHY_CATEGORY_ID, SOFTWARE_CATEGORY_ID, UNIVERSITY_CATEGORY_ID,
 };
 use bluephoenix_domain::semver_check::is_at_least_one;
 use bluephoenix_domain::terminology::{self, default_todo_kinds};
@@ -37,7 +37,9 @@ impl Db {
             std::fs::create_dir_all(parent)?;
         }
         let conn = Connection::open(path)?;
-        conn.execute_batch("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;")?;
+        conn.execute_batch(
+            "PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;",
+        )?;
         conn.execute_batch(SCHEMA)?;
         let mut db = Self {
             conn: Mutex::new(conn),
@@ -63,11 +65,9 @@ impl Db {
     fn ensure_device(&self) -> AppResult<String> {
         let conn = self.lock()?;
         if let Some(id) = conn
-            .query_row(
-                "SELECT id FROM devices LIMIT 1",
-                [],
-                |r| r.get::<_, String>(0),
-            )
+            .query_row("SELECT id FROM devices LIMIT 1", [], |r| {
+                r.get::<_, String>(0)
+            })
             .optional()?
         {
             return Ok(id);
@@ -155,7 +155,11 @@ fn seed_settings(conn: &Connection) -> AppResult<()> {
 }
 
 fn seed_user(conn: &Connection) -> AppResult<()> {
-    let count: i64 = conn.query_row("SELECT COUNT(*) FROM users WHERE deleted_at IS NULL", [], |r| r.get(0))?;
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM users WHERE deleted_at IS NULL",
+        [],
+        |r| r.get(0),
+    )?;
     if count == 0 {
         let id = new_id();
         let ts = now();
@@ -174,11 +178,61 @@ fn seed_categories(conn: &Connection) -> AppResult<()> {
     }
     let ts = now();
     let cats = [
-        (SOFTWARE_CATEGORY_ID, "software", "software", "Software", "code", "#3dd6c6", 1, 0, 1),
-        (UNIVERSITY_CATEGORY_ID, "university", "university", "University", "graduation-cap", "#5ec8e8", 1, 1, 1),
-        (FITNESS_CATEGORY_ID, "fitness", "generic", "Fitness", "dumbbell", "#4ade80", 0, 2, 1),
-        (PHOTOGRAPHY_CATEGORY_ID, "photography", "generic", "Photography", "camera", "#67e8f9", 0, 3, 1),
-        (PERSONAL_CATEGORY_ID, "personal", "generic", "Personal", "sparkles", "#a5b4fc", 1, 4, 1),
+        (
+            SOFTWARE_CATEGORY_ID,
+            "software",
+            "software",
+            "Software",
+            "code",
+            "#3dd6c6",
+            1,
+            0,
+            1,
+        ),
+        (
+            UNIVERSITY_CATEGORY_ID,
+            "university",
+            "university",
+            "University",
+            "graduation-cap",
+            "#5ec8e8",
+            1,
+            1,
+            1,
+        ),
+        (
+            FITNESS_CATEGORY_ID,
+            "fitness",
+            "generic",
+            "Fitness",
+            "dumbbell",
+            "#4ade80",
+            0,
+            2,
+            1,
+        ),
+        (
+            PHOTOGRAPHY_CATEGORY_ID,
+            "photography",
+            "generic",
+            "Photography",
+            "camera",
+            "#67e8f9",
+            0,
+            3,
+            1,
+        ),
+        (
+            PERSONAL_CATEGORY_ID,
+            "personal",
+            "generic",
+            "Personal",
+            "sparkles",
+            "#a5b4fc",
+            1,
+            4,
+            1,
+        ),
     ];
     for (id, slug, kind, name, icon, accent, enabled, order, system) in cats {
         conn.execute(
@@ -219,7 +273,13 @@ fn seed_tags(conn: &Connection) -> AppResult<()> {
     Ok(())
 }
 
-fn queue_outbox(conn: &Connection, table: &str, row_id: &str, op: &str, payload: serde_json::Value) -> AppResult<()> {
+fn queue_outbox(
+    conn: &Connection,
+    table: &str,
+    row_id: &str,
+    op: &str,
+    payload: serde_json::Value,
+) -> AppResult<()> {
     conn.execute(
         "INSERT INTO sync_outbox (id, table_name, row_id, op, payload, created_at) VALUES (?1,?2,?3,?4,?5,?6)",
         params![new_id(), table, row_id, op, payload.to_string(), now()],
@@ -227,7 +287,13 @@ fn queue_outbox(conn: &Connection, table: &str, row_id: &str, op: &str, payload:
     Ok(())
 }
 
-fn index_search(conn: &Connection, entity_type: &str, entity_id: &str, title: &str, body: &str) -> AppResult<()> {
+fn index_search(
+    conn: &Connection,
+    entity_type: &str,
+    entity_id: &str,
+    title: &str,
+    body: &str,
+) -> AppResult<()> {
     conn.execute("DELETE FROM search_index WHERE entity_id = ?1", [entity_id])?;
     conn.execute(
         "INSERT INTO search_index (entity_type, entity_id, title, body) VALUES (?1,?2,?3,?4)",
@@ -256,7 +322,11 @@ pub fn load_settings(conn: &Connection) -> AppSettingsDto {
         theme: setting(conn, "appearance.theme", "dark"),
         accent: setting(conn, "appearance.accent", "cyan"),
         reduced_motion: setting(conn, "appearance.reducedMotion", "false") == "true",
-        default_workspace: Some(setting(conn, "workspace.defaultCategoryId", SOFTWARE_CATEGORY_ID)),
+        default_workspace: Some(setting(
+            conn,
+            "workspace.defaultCategoryId",
+            SOFTWARE_CATEGORY_ID,
+        )),
         automatic_updates: setting(conn, "updates.automatic", "true") != "false",
         update_channel: setting(conn, "updates.channel", "stable"),
         launch_at_startup: setting(conn, "general.launchAtStartup", "false") == "true",
@@ -276,7 +346,11 @@ pub fn save_settings(conn: &Connection, settings: &AppSettingsDto) -> AppResult<
     set_setting(
         conn,
         "appearance.reducedMotion",
-        if settings.reduced_motion { "true" } else { "false" },
+        if settings.reduced_motion {
+            "true"
+        } else {
+            "false"
+        },
     )?;
     if let Some(id) = &settings.default_workspace {
         set_setting(conn, "workspace.defaultCategoryId", id)?;
@@ -284,13 +358,21 @@ pub fn save_settings(conn: &Connection, settings: &AppSettingsDto) -> AppResult<
     set_setting(
         conn,
         "updates.automatic",
-        if settings.automatic_updates { "true" } else { "false" },
+        if settings.automatic_updates {
+            "true"
+        } else {
+            "false"
+        },
     )?;
     set_setting(conn, "updates.channel", &settings.update_channel)?;
     set_setting(
         conn,
         "general.launchAtStartup",
-        if settings.launch_at_startup { "true" } else { "false" },
+        if settings.launch_at_startup {
+            "true"
+        } else {
+            "false"
+        },
     )?;
     set_setting(conn, "developer.gitPath", &settings.git_path)?;
     set_setting(conn, "developer.vscodePath", &settings.vscode_path)?;
@@ -300,7 +382,11 @@ pub fn save_settings(conn: &Connection, settings: &AppSettingsDto) -> AppResult<
     set_setting(
         conn,
         "grading.includeFailed",
-        if settings.include_failed_grades { "true" } else { "false" },
+        if settings.include_failed_grades {
+            "true"
+        } else {
+            "false"
+        },
     )?;
     Ok(())
 }
@@ -376,7 +462,10 @@ pub fn list_categories(conn: &Connection, include_disabled: bool) -> AppResult<V
         "SELECT id FROM categories WHERE deleted_at IS NULL AND enabled = 1 ORDER BY sort_order"
     };
     let mut stmt = conn.prepare(sql)?;
-    let ids: Vec<String> = stmt.query_map([], |r| r.get(0))?.filter_map(|r| r.ok()).collect();
+    let ids: Vec<String> = stmt
+        .query_map([], |r| r.get(0))?
+        .filter_map(|r| r.ok())
+        .collect();
     ids.into_iter().map(|id| category_dto(conn, &id)).collect()
 }
 
@@ -417,13 +506,20 @@ pub fn create_custom_category(
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
         .collect::<String>();
-    let order: i64 = conn.query_row("SELECT COALESCE(MAX(sort_order),0)+1 FROM categories", [], |r| r.get(0))?;
+    let order: i64 = conn.query_row(
+        "SELECT COALESCE(MAX(sort_order),0)+1 FROM categories",
+        [],
+        |r| r.get(0),
+    )?;
     conn.execute(
         "INSERT INTO categories (id, slug, kind, name, icon, accent, enabled, sort_order, is_system, created_at, updated_at, revision)
          VALUES (?1,?2,'generic',?3,?4,?5,1,?6,0,?7,?7,1)",
         params![id, slug, name, icon, accent, order, ts],
     )?;
-    for (i, (slug_k, name_k)) in default_todo_kinds(CategoryKind::Generic).into_iter().enumerate() {
+    for (i, (slug_k, name_k)) in default_todo_kinds(CategoryKind::Generic)
+        .into_iter()
+        .enumerate()
+    {
         conn.execute(
             "INSERT INTO todo_kinds (id, category_id, slug, name, is_system, sort_order, created_at, updated_at, revision)
              VALUES (?1,?2,?3,?4,1,?5,?6,?6,1)",
@@ -439,7 +535,8 @@ pub fn create_custom_category(
 }
 
 pub fn list_tags(conn: &Connection) -> AppResult<Vec<TagDto>> {
-    let mut stmt = conn.prepare("SELECT id, name, kind FROM tags WHERE deleted_at IS NULL ORDER BY kind, name")?;
+    let mut stmt = conn
+        .prepare("SELECT id, name, kind FROM tags WHERE deleted_at IS NULL ORDER BY kind, name")?;
     let rows = stmt.query_map([], |r| {
         Ok(TagDto {
             id: r.get(0)?,
@@ -452,7 +549,8 @@ pub fn list_tags(conn: &Connection) -> AppResult<Vec<TagDto>> {
 
 pub fn create_custom_tag(conn: &Connection, name: &str, kind: &str) -> AppResult<TagDto> {
     let name = required_name(name, "tag")?;
-    let kind = TagKind::parse(kind).ok_or_else(|| AppError::msg("Tag kind must be language, framework, or custom"))?;
+    let kind = TagKind::parse(kind)
+        .ok_or_else(|| AppError::msg("Tag kind must be language, framework, or custom"))?;
     let kind_str = kind.as_str();
     if let Some((id, existing_name, existing_kind, deleted_at)) = conn
         .query_row(
@@ -664,7 +762,9 @@ fn attendance_for(conn: &Connection, project_id: &str) -> AttendanceDto {
 
 fn exam_average(conn: &Connection, project_id: &str) -> Option<f64> {
     let mut stmt = conn
-        .prepare("SELECT status, grade FROM exam_attempts WHERE project_id=?1 AND deleted_at IS NULL")
+        .prepare(
+            "SELECT status, grade FROM exam_attempts WHERE project_id=?1 AND deleted_at IS NULL",
+        )
         .ok()?;
     let attempts: Vec<ExamAttemptView> = stmt
         .query_map([project_id], |r| {
@@ -904,7 +1004,13 @@ pub fn create_project(
             )?;
         }
     }
-    index_search(conn, "project", &id, &name, input.description.as_deref().unwrap_or(""))?;
+    index_search(
+        conn,
+        "project",
+        &id,
+        &name,
+        input.description.as_deref().unwrap_or(""),
+    )?;
     activity(
         conn,
         Some(&id),
@@ -1099,10 +1205,12 @@ pub fn running_timer(conn: &Connection, device_id: &str) -> AppResult<Option<Run
         Utc::now(),
     );
     let topic_title = row.2.as_ref().and_then(|tid| {
-        conn.query_row("SELECT title FROM course_topics WHERE id=?1", [tid], |r| r.get(0))
-            .optional()
-            .ok()
-            .flatten()
+        conn.query_row("SELECT title FROM course_topics WHERE id=?1", [tid], |r| {
+            r.get(0)
+        })
+        .optional()
+        .ok()
+        .flatten()
     });
     Ok(Some(RunningTimerDto {
         entry: TimeEntryDto {
@@ -1212,7 +1320,13 @@ pub fn add_manual_entry(
     )?;
     recompute_time(conn, project_id)?;
     evaluate_project(conn, project_id)?;
-    queue_outbox(conn, "time_entries", &id, "upsert", json!({"id": id, "projectId": project_id}))?;
+    queue_outbox(
+        conn,
+        "time_entries",
+        &id,
+        "upsert",
+        json!({"id": id, "projectId": project_id}),
+    )?;
     Ok(())
 }
 
@@ -1377,9 +1491,27 @@ pub fn create_todo(
          VALUES (?1,?2,?3,?4,?5,?6,'open',?7,?8,?8,1)",
         params![id, project_id, kind_id, title, description.clone().unwrap_or_default(), priority, due_date, ts],
     )?;
-    index_search(conn, "todo", &id, &title, description.as_deref().unwrap_or(""))?;
-    activity(conn, Some(project_id), None, "todo.created", json!({"title": title}))?;
-    queue_outbox(conn, "todos", &id, "upsert", json!({"id": id, "title": title, "projectId": project_id}))?;
+    index_search(
+        conn,
+        "todo",
+        &id,
+        &title,
+        description.as_deref().unwrap_or(""),
+    )?;
+    activity(
+        conn,
+        Some(project_id),
+        None,
+        "todo.created",
+        json!({"title": title}),
+    )?;
+    queue_outbox(
+        conn,
+        "todos",
+        &id,
+        "upsert",
+        json!({"id": id, "title": title, "projectId": project_id}),
+    )?;
     list_todos(
         conn,
         TodoFilter {
@@ -1397,17 +1529,36 @@ pub fn create_todo(
 
 pub fn set_todo_status(conn: &Connection, id: &str, status: &str) -> AppResult<()> {
     let ts = now();
-    let completed = if status == "completed" { Some(ts.clone()) } else { None };
+    let completed = if status == "completed" {
+        Some(ts.clone())
+    } else {
+        None
+    };
     conn.execute(
         "UPDATE todos SET status=?1, completed_at=?2, updated_at=?3, revision=revision+1 WHERE id=?4",
         params![status, completed, ts, id],
     )?;
-    let project_id: String = conn.query_row("SELECT project_id FROM todos WHERE id=?1", [id], |r| r.get(0))?;
+    let project_id: String =
+        conn.query_row("SELECT project_id FROM todos WHERE id=?1", [id], |r| {
+            r.get(0)
+        })?;
     if status == "completed" {
-        activity(conn, Some(&project_id), None, "todo.completed", json!({"id": id}))?;
+        activity(
+            conn,
+            Some(&project_id),
+            None,
+            "todo.completed",
+            json!({"id": id}),
+        )?;
         evaluate_project(conn, &project_id)?;
     }
-    queue_outbox(conn, "todos", id, "upsert", json!({"id": id, "status": status}))?;
+    queue_outbox(
+        conn,
+        "todos",
+        id,
+        "upsert",
+        json!({"id": id, "status": status}),
+    )?;
     Ok(())
 }
 
@@ -1419,12 +1570,19 @@ pub fn delete_todo(conn: &Connection, id: &str) -> AppResult<()> {
     Ok(())
 }
 
-pub fn todo_kinds(conn: &Connection, category_id: &str) -> AppResult<Vec<(String, String, String)>> {
+pub fn todo_kinds(
+    conn: &Connection,
+    category_id: &str,
+) -> AppResult<Vec<(String, String, String)>> {
     let mut stmt = conn.prepare(
         "SELECT id, slug, name FROM todo_kinds WHERE category_id=?1 AND deleted_at IS NULL ORDER BY sort_order",
     )?;
     let rows = stmt.query_map([category_id], |r| {
-        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?))
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, String>(2)?,
+        ))
     })?;
     Ok(rows.filter_map(|r| r.ok()).collect())
 }
@@ -1453,7 +1611,11 @@ pub fn upsert_link(conn: &Connection, link: LinkDto) -> AppResult<LinkDto> {
     optional_url(Some(&link.url))?;
     let title = required_name(&link.title, "title")?;
     let ts = now();
-    let id = if link.id.is_empty() { new_id() } else { link.id.clone() };
+    let id = if link.id.is_empty() {
+        new_id()
+    } else {
+        link.id.clone()
+    };
     conn.execute(
         "INSERT INTO project_links (id, project_id, title, url, icon, description, pinned, sort_order, created_at, updated_at, revision)
          VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?9,1)
@@ -1474,7 +1636,11 @@ pub fn delete_link(conn: &Connection, id: &str) -> AppResult<()> {
     Ok(())
 }
 
-pub fn list_project_files(conn: &Connection, project_id: &str, device_id: &str) -> AppResult<Vec<ProjectFileDto>> {
+pub fn list_project_files(
+    conn: &Connection,
+    project_id: &str,
+    device_id: &str,
+) -> AppResult<Vec<ProjectFileDto>> {
     let mut stmt = conn.prepare(
         "SELECT f.id, f.project_id, f.display_name, f.relative_path, f.mime, f.size_bytes, f.file_kind, b.absolute_path,
                 d.status, d.stage, d.limitation
@@ -1511,7 +1677,9 @@ pub fn add_project_file(
 ) -> AppResult<ProjectFileDto> {
     let id = new_id();
     let ts = now();
-    let size = std::fs::metadata(absolute_path).ok().map(|m| m.len() as i64);
+    let size = std::fs::metadata(absolute_path)
+        .ok()
+        .map(|m| m.len() as i64);
     conn.execute(
         "INSERT INTO project_files (id, project_id, display_name, relative_path, size_bytes, file_kind, created_at, updated_at, revision)
          VALUES (?1,?2,?3,?4,?5,?6,?7,?7,1)",
@@ -1575,7 +1743,11 @@ pub fn upsert_command(conn: &Connection, cmd: CommandDto) -> AppResult<CommandDt
         return Err(AppError::msg("command is required"));
     }
     let ts = now();
-    let id = if cmd.id.is_empty() { new_id() } else { cmd.id.clone() };
+    let id = if cmd.id.is_empty() {
+        new_id()
+    } else {
+        cmd.id.clone()
+    };
     conn.execute(
         "INSERT INTO commands (id, project_id, name, command, description, working_directory, pinned, favorite, sort_order, created_at, updated_at, revision)
          VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?10,1)
@@ -1625,7 +1797,8 @@ pub fn add_version(
     title: Option<String>,
     changelog: Option<String>,
 ) -> AppResult<VersionDto> {
-    bluephoenix_domain::semver_check::parse_version(version).map_err(|_| AppError::InvalidVersion)?;
+    bluephoenix_domain::semver_check::parse_version(version)
+        .map_err(|_| AppError::InvalidVersion)?;
     let id = new_id();
     let ts = now();
     conn.execute(
@@ -1647,7 +1820,13 @@ pub fn add_version(
         "UPDATE projects SET released_at=?1, updated_at=?1, revision=revision+1 WHERE id=?2 AND released_at IS NULL",
         params![ts, project_id],
     )?;
-    activity(conn, Some(project_id), None, "version.released", json!({"version": version}))?;
+    activity(
+        conn,
+        Some(project_id),
+        None,
+        "version.released",
+        json!({"version": version}),
+    )?;
     evaluate_project(conn, project_id)?;
     list_versions(conn, project_id)?
         .into_iter()
@@ -1698,28 +1877,34 @@ fn topic_seconds(conn: &Connection, topic_id: &str) -> i64 {
         return 0;
     };
     let now_dt = Utc::now();
-    stmt.query_map([topic_id], |r| Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?)))
-        .ok()
-        .map(|rows| {
-            rows.flatten()
-                .map(|row| {
-                    elapsed_seconds(
-                        &TimeRange {
-                            started_at: parse_dt(&row.0),
-                            ended_at: row.1.as_deref().map(parse_dt),
-                        },
-                        now_dt,
-                    )
-                })
-                .sum()
-        })
-        .unwrap_or(0)
+    stmt.query_map([topic_id], |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?))
+    })
+    .ok()
+    .map(|rows| {
+        rows.flatten()
+            .map(|row| {
+                elapsed_seconds(
+                    &TimeRange {
+                        started_at: parse_dt(&row.0),
+                        ended_at: row.1.as_deref().map(parse_dt),
+                    },
+                    now_dt,
+                )
+            })
+            .sum()
+    })
+    .unwrap_or(0)
 }
 
 pub fn upsert_topic(conn: &Connection, topic: TopicDto) -> AppResult<TopicDto> {
     let title = required_name(&topic.title, "title")?;
     let ts = now();
-    let id = if topic.id.is_empty() { new_id() } else { topic.id.clone() };
+    let id = if topic.id.is_empty() {
+        new_id()
+    } else {
+        topic.id.clone()
+    };
     conn.execute(
         "INSERT INTO course_topics (id, project_id, title, description, sort_order, status, estimated_seconds, completion_percent, created_at, updated_at, revision)
          VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?9,1)
@@ -1729,7 +1914,13 @@ pub fn upsert_topic(conn: &Connection, topic: TopicDto) -> AppResult<TopicDto> {
         params![id, topic.project_id, title, topic.description, topic.sort_order, topic.status, topic.estimated_seconds, topic.completion_percent, ts],
     )?;
     if topic.status == "completed" {
-        activity(conn, Some(&topic.project_id), None, "topic.completed", json!({"title": title}))?;
+        activity(
+            conn,
+            Some(&topic.project_id),
+            None,
+            "topic.completed",
+            json!({"title": title}),
+        )?;
         evaluate_project(conn, &topic.project_id)?;
     }
     list_topics(conn, &topic.project_id)?
@@ -1769,7 +1960,11 @@ pub fn list_lessons(conn: &Connection, project_id: &str) -> AppResult<Vec<Lesson
 
 pub fn upsert_lesson(conn: &Connection, lesson: LessonDto) -> AppResult<LessonDto> {
     let ts = now();
-    let id = if lesson.id.is_empty() { new_id() } else { lesson.id.clone() };
+    let id = if lesson.id.is_empty() {
+        new_id()
+    } else {
+        lesson.id.clone()
+    };
     conn.execute(
         "INSERT INTO course_lessons (id, project_id, topic_id, date, start_time, end_time, duration_seconds, attended, notes, created_at, updated_at, revision)
          VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?10,1)
@@ -1779,7 +1974,13 @@ pub fn upsert_lesson(conn: &Connection, lesson: LessonDto) -> AppResult<LessonDt
         params![id, lesson.project_id, lesson.topic_id, lesson.date, lesson.start_time, lesson.end_time, lesson.duration_seconds, lesson.attended as i64, lesson.notes, ts],
     )?;
     if lesson.attended {
-        activity(conn, Some(&lesson.project_id), None, "lesson.attended", json!({"date": lesson.date}))?;
+        activity(
+            conn,
+            Some(&lesson.project_id),
+            None,
+            "lesson.attended",
+            json!({"date": lesson.date}),
+        )?;
     }
     evaluate_project(conn, &lesson.project_id)?;
     Ok(LessonDto { id, ..lesson })
@@ -1793,7 +1994,11 @@ pub fn delete_lesson(conn: &Connection, id: &str) -> AppResult<()> {
     Ok(())
 }
 
-pub fn list_exams(conn: &Connection, project_id: Option<&str>, category_id: Option<&str>) -> AppResult<Vec<ExamDto>> {
+pub fn list_exams(
+    conn: &Connection,
+    project_id: Option<&str>,
+    category_id: Option<&str>,
+) -> AppResult<Vec<ExamDto>> {
     let mut sql = String::from(
         "SELECT e.id, e.project_id, p.name, e.date, e.grade, e.status, e.notes
          FROM exam_attempts e JOIN projects p ON p.id = e.project_id
@@ -1808,9 +2013,11 @@ pub fn list_exams(conn: &Connection, project_id: Option<&str>, category_id: Opti
     let mut stmt = conn.prepare(&sql)?;
     let bind = project_id.or(category_id);
     let rows = if let Some(id) = bind {
-        stmt.query_map([id], map_exam)?.collect::<Result<Vec<_>, _>>()?
+        stmt.query_map([id], map_exam)?
+            .collect::<Result<Vec<_>, _>>()?
     } else {
-        stmt.query_map([], map_exam)?.collect::<Result<Vec<_>, _>>()?
+        stmt.query_map([], map_exam)?
+            .collect::<Result<Vec<_>, _>>()?
     };
     Ok(rows)
 }
@@ -1832,7 +2039,11 @@ pub fn upsert_exam(conn: &Connection, exam: ExamDto) -> AppResult<ExamDto> {
         exams::validate_grade(grade, 30.0).map_err(|_| AppError::InvalidGrade)?;
     }
     let ts = now();
-    let id = if exam.id.is_empty() { new_id() } else { exam.id.clone() };
+    let id = if exam.id.is_empty() {
+        new_id()
+    } else {
+        exam.id.clone()
+    };
     conn.execute(
         "INSERT INTO exam_attempts (id, project_id, date, grade, status, notes, created_at, updated_at, revision)
          VALUES (?1,?2,?3,?4,?5,?6,?7,?7,1)
@@ -1845,7 +2056,13 @@ pub fn upsert_exam(conn: &Connection, exam: ExamDto) -> AppResult<ExamDto> {
         "failed" => "exam.failed",
         _ => "exam.attempted",
     };
-    activity(conn, Some(&exam.project_id), None, event, json!({"grade": exam.grade, "status": exam.status}))?;
+    activity(
+        conn,
+        Some(&exam.project_id),
+        None,
+        event,
+        json!({"grade": exam.grade, "status": exam.status}),
+    )?;
     evaluate_project(conn, &exam.project_id)?;
     evaluate_user(conn)?;
     queue_outbox(
@@ -1866,7 +2083,11 @@ pub fn delete_exam(conn: &Connection, id: &str) -> AppResult<()> {
     Ok(())
 }
 
-pub fn list_activity(conn: &Connection, category_id: Option<&str>, project_id: Option<&str>) -> AppResult<Vec<ActivityDto>> {
+pub fn list_activity(
+    conn: &Connection,
+    category_id: Option<&str>,
+    project_id: Option<&str>,
+) -> AppResult<Vec<ActivityDto>> {
     let mut sql = String::from(
         "SELECT a.id, a.project_id, p.name, a.category_id, a.event_type, a.payload, a.created_at
          FROM activity_events a LEFT JOIN projects p ON p.id = a.project_id
@@ -1892,7 +2113,9 @@ pub fn list_activity(conn: &Connection, category_id: Option<&str>, project_id: O
         })
     };
     let rows = if let Some(id) = project_id.or(category_id) {
-        stmt.query_map([id], mapper)?.filter_map(|r| r.ok()).collect()
+        stmt.query_map([id], mapper)?
+            .filter_map(|r| r.ok())
+            .collect()
     } else {
         stmt.query_map([], mapper)?.filter_map(|r| r.ok()).collect()
     };
@@ -2144,7 +2367,11 @@ pub fn evaluate_project(conn: &Connection, project_id: &str) -> AppResult<Vec<St
     let mut snap = AchievementSnapshot {
         kind: Some(kind),
         tracked_seconds: tracked,
-        study_seconds: if kind == CategoryKind::University { tracked } else { 0 },
+        study_seconds: if kind == CategoryKind::University {
+            tracked
+        } else {
+            0
+        },
         completed_todos,
         ..AchievementSnapshot::default()
     };
@@ -2366,7 +2593,10 @@ pub fn finish_job(conn: &Connection, id: &str, error: Option<String>) -> AppResu
 }
 
 pub fn cache_files(conn: &Connection, project_id: &str, entries: &[FileEntryDto]) -> AppResult<()> {
-    conn.execute("DELETE FROM file_index_cache WHERE project_id=?1", [project_id])?;
+    conn.execute(
+        "DELETE FROM file_index_cache WHERE project_id=?1",
+        [project_id],
+    )?;
     let ts = now();
     for entry in entries {
         conn.execute(
@@ -2397,7 +2627,11 @@ pub fn export_all(conn: &Connection) -> AppResult<serde_json::Value> {
     let dump_table = |name: &str| -> AppResult<Vec<serde_json::Value>> {
         let mut stmt = conn.prepare(&format!("SELECT * FROM {name}"))?;
         let col_count = stmt.column_count();
-        let names: Vec<String> = stmt.column_names().into_iter().map(|s| s.to_string()).collect();
+        let names: Vec<String> = stmt
+            .column_names()
+            .into_iter()
+            .map(|s| s.to_string())
+            .collect();
         let mut rows_iter = stmt.query([])?;
         let mut out = Vec::new();
         while let Some(row) = rows_iter.next()? {
@@ -2409,8 +2643,18 @@ pub fn export_all(conn: &Connection) -> AppResult<serde_json::Value> {
                     .ok()
                     .flatten()
                     .map(serde_json::Value::String)
-                    .or_else(|| row.get::<_, Option<i64>>(i).ok().flatten().map(|n| json!(n)))
-                    .or_else(|| row.get::<_, Option<f64>>(i).ok().flatten().map(|n| json!(n)))
+                    .or_else(|| {
+                        row.get::<_, Option<i64>>(i)
+                            .ok()
+                            .flatten()
+                            .map(|n| json!(n))
+                    })
+                    .or_else(|| {
+                        row.get::<_, Option<f64>>(i)
+                            .ok()
+                            .flatten()
+                            .map(|n| json!(n))
+                    })
                     .unwrap_or(serde_json::Value::Null);
                 obj.insert(key, value);
             }
@@ -2465,7 +2709,11 @@ pub fn set_default_workspace(conn: &Connection, id: &str) -> AppResult<()> {
     set_setting(conn, "workspace.defaultCategoryId", id)
 }
 
-pub fn replace_project_tags(conn: &Connection, project_id: &str, tag_ids: &[String]) -> AppResult<()> {
+pub fn replace_project_tags(
+    conn: &Connection,
+    project_id: &str,
+    tag_ids: &[String],
+) -> AppResult<()> {
     conn.execute("DELETE FROM project_tags WHERE project_id=?1", [project_id])?;
     let ts = now();
     for tag_id in tag_ids {
@@ -2614,7 +2862,10 @@ fn insert_portable_row(conn: &Connection, table: &str, row: &serde_json::Value) 
             other => Some(other.to_string()),
         })
         .collect();
-    conn.execute(&sql, rusqlite::params_from_iter(values.iter().map(|v| v.as_deref())))?;
+    conn.execute(
+        &sql,
+        rusqlite::params_from_iter(values.iter().map(|v| v.as_deref())),
+    )?;
     Ok(())
 }
 
@@ -2628,7 +2879,11 @@ pub fn apply_pull_changes(conn: &Connection, changes: &[serde_json::Value]) -> A
         }
         let mut payload = change.get("payload").cloned().unwrap_or_else(|| json!({}));
         if payload.get("id").is_none() {
-            if let Some(row_id) = change.get("rowId").or(change.get("row_id")).and_then(|v| v.as_str()) {
+            if let Some(row_id) = change
+                .get("rowId")
+                .or(change.get("row_id"))
+                .and_then(|v| v.as_str())
+            {
                 if let Some(obj) = payload.as_object_mut() {
                     obj.insert("id".into(), json!(row_id));
                 }
@@ -2692,8 +2947,14 @@ pub fn apply_secret_envelopes(conn: &Connection, secrets: &[serde_json::Value]) 
         let Some(id) = secret.get("id").and_then(|v| v.as_str()) else {
             continue;
         };
-        let kind = secret.get("kind").and_then(|v| v.as_str()).unwrap_or("unknown");
-        let ciphertext = secret.get("ciphertext").and_then(|v| v.as_str()).unwrap_or("");
+        let kind = secret
+            .get("kind")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown");
+        let ciphertext = secret
+            .get("ciphertext")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
         let nonce = secret.get("nonce").and_then(|v| v.as_str()).unwrap_or("");
         let wrap = secret.get("wrapParams").cloned().unwrap_or(json!({}));
         let rev = secret.get("revision").and_then(|v| v.as_i64()).unwrap_or(1);
@@ -2714,4 +2975,3 @@ impl Db {
         self.with(f)
     }
 }
-

@@ -25,7 +25,10 @@ pub async fn complete_with_fallback<P: AiProvider>(
                 return Ok(FallbackOutcome {
                     fallback_used: index > 0,
                     attempted: {
-                        let mut used = attempts.iter().map(|a: &AttemptRecord| a.model.clone()).collect::<Vec<_>>();
+                        let mut used = attempts
+                            .iter()
+                            .map(|a: &AttemptRecord| a.model.clone())
+                            .collect::<Vec<_>>();
                         used.push(model.clone());
                         used
                     },
@@ -97,7 +100,9 @@ mod tests {
         let p = Scripted {
             results: Mutex::new(vec![Ok(ok())]),
         };
-        let out = complete_with_fallback(&p, &["a".into()], req()).await.unwrap();
+        let out = complete_with_fallback(&p, &["a".into()], req())
+            .await
+            .unwrap();
         assert!(!out.fallback_used);
         assert_eq!(out.response.model, "a");
     }
@@ -107,7 +112,9 @@ mod tests {
         let p = Scripted {
             results: Mutex::new(vec![Err(err(AiFailureKind::Unavailable)), Ok(ok())]),
         };
-        let out = complete_with_fallback(&p, &["a".into(), "b".into()], req()).await.unwrap();
+        let out = complete_with_fallback(&p, &["a".into(), "b".into()], req())
+            .await
+            .unwrap();
         assert!(out.fallback_used);
         assert_eq!(out.response.model, "b");
     }
@@ -121,7 +128,9 @@ mod tests {
                 Ok(ok()),
             ]),
         };
-        let out = complete_with_fallback(&p, &["a".into(), "b".into(), "c".into()], req()).await.unwrap();
+        let out = complete_with_fallback(&p, &["a".into(), "b".into(), "c".into()], req())
+            .await
+            .unwrap();
         assert_eq!(out.response.model, "c");
     }
 
@@ -135,13 +144,10 @@ mod tests {
                 Err(err(AiFailureKind::Network)),
             ]),
         };
-        let err = complete_with_fallback(
-            &p,
-            &["a".into(), "b".into(), "c".into(), "d".into()],
-            req(),
-        )
-        .await
-        .unwrap_err();
+        let err =
+            complete_with_fallback(&p, &["a".into(), "b".into(), "c".into(), "d".into()], req())
+                .await
+                .unwrap_err();
         match err {
             AiError::AllFailed { attempts } => assert_eq!(attempts.len(), 4),
             other => panic!("{other:?}"),
@@ -156,7 +162,13 @@ mod tests {
         let err = complete_with_fallback(&p, &["a".into(), "b".into()], req())
             .await
             .unwrap_err();
-        assert!(matches!(err, AiError::Provider { kind: AiFailureKind::Auth, .. }));
+        assert!(matches!(
+            err,
+            AiError::Provider {
+                kind: AiFailureKind::Auth,
+                ..
+            }
+        ));
     }
 
     #[tokio::test]
@@ -164,7 +176,9 @@ mod tests {
         let p = Scripted {
             results: Mutex::new(vec![Err(err(AiFailureKind::Unavailable)), Ok(ok())]),
         };
-        let out = complete_with_fallback(&p, &["only".into(), "two".into()], req()).await.unwrap();
+        let out = complete_with_fallback(&p, &["only".into(), "two".into()], req())
+            .await
+            .unwrap();
         assert_eq!(out.response.model, "two");
     }
 
@@ -179,7 +193,9 @@ mod tests {
             ]),
         };
         let models: Vec<String> = (1..=8).map(|n| format!("m{n}")).collect();
-        let err = complete_with_fallback(&p, &models, req()).await.unwrap_err();
+        let err = complete_with_fallback(&p, &models, req())
+            .await
+            .unwrap_err();
         match err {
             AiError::AllFailed { attempts } => {
                 assert_eq!(attempts.len(), 4);

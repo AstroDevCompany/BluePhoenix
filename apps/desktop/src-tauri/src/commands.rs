@@ -21,7 +21,11 @@ pub fn get_settings(state: State<AppState>) -> AppResult<AppSettingsDto> {
 }
 
 #[tauri::command]
-pub fn save_settings(app: AppHandle, state: State<AppState>, settings: AppSettingsDto) -> AppResult<AppSettingsDto> {
+pub fn save_settings(
+    app: AppHandle,
+    state: State<AppState>,
+    settings: AppSettingsDto,
+) -> AppResult<AppSettingsDto> {
     state.db.with(|c| db::save_settings(c, &settings))?;
     apply_launch_at_startup(&app, settings.launch_at_startup);
     state.db.with(|c| Ok(db::load_settings(c)))
@@ -30,7 +34,12 @@ pub fn save_settings(app: AppHandle, state: State<AppState>, settings: AppSettin
 pub fn sync_launch_at_startup(app: &AppHandle) {
     let enabled = app
         .try_state::<AppState>()
-        .and_then(|state| state.db.with(|c| Ok(db::load_settings(c).launch_at_startup)).ok())
+        .and_then(|state| {
+            state
+                .db
+                .with(|c| Ok(db::load_settings(c).launch_at_startup))
+                .ok()
+        })
         .unwrap_or(false);
     apply_launch_at_startup(app, enabled);
 }
@@ -50,14 +59,21 @@ fn apply_launch_at_startup(app: &AppHandle, enabled: bool) {
 }
 
 #[tauri::command]
-pub fn list_categories(state: State<AppState>, include_disabled: Option<bool>) -> AppResult<Vec<CategoryDto>> {
+pub fn list_categories(
+    state: State<AppState>,
+    include_disabled: Option<bool>,
+) -> AppResult<Vec<CategoryDto>> {
     state
         .db
         .with(|c| db::list_categories(c, include_disabled.unwrap_or(false)))
 }
 
 #[tauri::command]
-pub fn set_category_enabled(state: State<AppState>, id: String, enabled: bool) -> AppResult<CategoryDto> {
+pub fn set_category_enabled(
+    state: State<AppState>,
+    id: String,
+    enabled: bool,
+) -> AppResult<CategoryDto> {
     state.db.with(|c| db::set_category_enabled(c, &id, enabled))
 }
 
@@ -79,8 +95,14 @@ pub fn list_tags(state: State<AppState>) -> AppResult<Vec<TagDto>> {
 }
 
 #[tauri::command]
-pub fn create_custom_tag(state: State<AppState>, name: String, kind: Option<String>) -> AppResult<TagDto> {
-    state.db.with(|c| db::create_custom_tag(c, &name, kind.as_deref().unwrap_or("custom")))
+pub fn create_custom_tag(
+    state: State<AppState>,
+    name: String,
+    kind: Option<String>,
+) -> AppResult<TagDto> {
+    state
+        .db
+        .with(|c| db::create_custom_tag(c, &name, kind.as_deref().unwrap_or("custom")))
 }
 
 #[tauri::command]
@@ -110,7 +132,10 @@ pub fn get_project(state: State<AppState>, id: String) -> AppResult<ProjectCardD
 }
 
 #[tauri::command]
-pub fn create_project(state: State<AppState>, input: CreateProjectInput) -> AppResult<ProjectCardDto> {
+pub fn create_project(
+    state: State<AppState>,
+    input: CreateProjectInput,
+) -> AppResult<ProjectCardDto> {
     state
         .db
         .with(|c| db::create_project(c, &state.db.device_id, input))
@@ -142,7 +167,10 @@ pub struct UpdateProjectInput {
 }
 
 #[tauri::command]
-pub fn update_project(state: State<AppState>, input: UpdateProjectInput) -> AppResult<ProjectCardDto> {
+pub fn update_project(
+    state: State<AppState>,
+    input: UpdateProjectInput,
+) -> AppResult<ProjectCardDto> {
     state.db.with(|c| {
         db::update_project_fields(
             c,
@@ -249,7 +277,10 @@ pub fn delete_time_entry(state: State<AppState>, id: String) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub fn list_time_entries(state: State<AppState>, project_id: String) -> AppResult<Vec<TimeEntryDto>> {
+pub fn list_time_entries(
+    state: State<AppState>,
+    project_id: String,
+) -> AppResult<Vec<TimeEntryDto>> {
     state.db.with(|c| db::list_time_entries(c, &project_id))
 }
 
@@ -286,9 +317,17 @@ pub fn create_todo(
     priority: Option<String>,
     due_date: Option<String>,
 ) -> AppResult<TodoDto> {
-    state
-        .db
-        .with(|c| db::create_todo(c, &project_id, &title, description, kind_id, priority, due_date))
+    state.db.with(|c| {
+        db::create_todo(
+            c,
+            &project_id,
+            &title,
+            description,
+            kind_id,
+            priority,
+            due_date,
+        )
+    })
 }
 
 #[tauri::command]
@@ -302,7 +341,10 @@ pub fn delete_todo(state: State<AppState>, id: String) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub fn todo_kinds(state: State<AppState>, category_id: String) -> AppResult<Vec<(String, String, String)>> {
+pub fn todo_kinds(
+    state: State<AppState>,
+    category_id: String,
+) -> AppResult<Vec<(String, String, String)>> {
     state.db.with(|c| db::todo_kinds(c, &category_id))
 }
 
@@ -322,7 +364,10 @@ pub fn delete_link(state: State<AppState>, id: String) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub fn list_project_files(state: State<AppState>, project_id: String) -> AppResult<Vec<ProjectFileDto>> {
+pub fn list_project_files(
+    state: State<AppState>,
+    project_id: String,
+) -> AppResult<Vec<ProjectFileDto>> {
     state
         .db
         .with(|c| db::list_project_files(c, &project_id, &state.db.device_id))
@@ -346,7 +391,15 @@ pub fn add_project_file(
             file_kind,
         )?;
         if db::project_kind(c, &project_id)? != bluephoenix_domain::ids::CategoryKind::Software {
-            crate::ai_store::upsert_document_record(c, &file.id, &project_id, "pending", "Queued", None, None)?;
+            crate::ai_store::upsert_document_record(
+                c,
+                &file.id,
+                &project_id,
+                "pending",
+                "Queued",
+                None,
+                None,
+            )?;
             let _ = db::enqueue_job(
                 c,
                 "index_documents",
@@ -368,7 +421,10 @@ pub fn list_folder(path: String) -> AppResult<Vec<FileEntryDto>> {
 }
 
 #[tauri::command]
-pub fn scan_project_folder(state: State<AppState>, project_id: String) -> AppResult<Vec<FileEntryDto>> {
+pub fn scan_project_folder(
+    state: State<AppState>,
+    project_id: String,
+) -> AppResult<Vec<FileEntryDto>> {
     let path = state.db.with(|c| {
         let (local, _) = db::project_binding(c, &state.db.device_id, &project_id);
         Ok(local)
@@ -380,7 +436,11 @@ pub fn scan_project_folder(state: State<AppState>, project_id: String) -> AppRes
     let cloned = entries.clone();
     state.db.with(|c| {
         db::cache_files(c, &project_id, &cloned)?;
-        let _ = db::enqueue_job(c, "index_files", serde_json::json!({"projectId": project_id}));
+        let _ = db::enqueue_job(
+            c,
+            "index_files",
+            serde_json::json!({"projectId": project_id}),
+        );
         Ok(())
     })?;
     Ok(entries)
@@ -454,7 +514,9 @@ pub fn run_command(
     } else {
         state.db.with(|c| {
             let (local, _) = db::project_binding(c, &state.db.device_id, &project_id);
-            Ok(local.map(PathBuf::from).unwrap_or_else(|| PathBuf::from(".")))
+            Ok(local
+                .map(PathBuf::from)
+                .unwrap_or_else(|| PathBuf::from(".")))
         })?
     };
     let output = Command::new(&program)
@@ -595,7 +657,10 @@ pub fn list_activity(
 }
 
 #[tauri::command]
-pub fn list_achievements(state: State<AppState>, project_id: Option<String>) -> AppResult<Vec<UnlockDto>> {
+pub fn list_achievements(
+    state: State<AppState>,
+    project_id: Option<String>,
+) -> AppResult<Vec<UnlockDto>> {
     state
         .db
         .with(|c| Ok(db::list_unlocks(c, project_id.as_deref())))
@@ -617,7 +682,10 @@ pub fn search(state: State<AppState>, query: String) -> AppResult<Vec<SearchHitD
 }
 
 #[tauri::command]
-pub fn project_context(state: State<AppState>, project_id: String) -> AppResult<bluephoenix_domain::context::ProjectContext> {
+pub fn project_context(
+    state: State<AppState>,
+    project_id: String,
+) -> AppResult<bluephoenix_domain::context::ProjectContext> {
     state.db.with(|c| db::project_context(c, &project_id))
 }
 
@@ -632,7 +700,10 @@ pub fn import_data(state: State<AppState>, data: serde_json::Value) -> AppResult
 }
 
 #[tauri::command]
-pub fn complete_onboarding(state: State<AppState>, default_workspace: Option<String>) -> AppResult<()> {
+pub fn complete_onboarding(
+    state: State<AppState>,
+    default_workspace: Option<String>,
+) -> AppResult<()> {
     state.db.with(|c| {
         if let Some(id) = default_workspace {
             db::set_default_workspace(c, &id)?;
@@ -658,16 +729,21 @@ pub fn local_version() -> String {
 }
 
 fn file_path_to_string(path: tauri_plugin_dialog::FilePath) -> Option<String> {
-    path.into_path().ok().map(|p| p.to_string_lossy().into_owned())
+    path.into_path()
+        .ok()
+        .map(|p| p.to_string_lossy().into_owned())
 }
 
 #[tauri::command]
 pub async fn pick_folder(app: AppHandle) -> AppResult<Option<String>> {
     use tauri_plugin_dialog::DialogExt;
     let (tx, rx) = tokio::sync::oneshot::channel();
-    app.dialog().file().set_title("Choose a folder").pick_folder(move |folder| {
-        let _ = tx.send(folder);
-    });
+    app.dialog()
+        .file()
+        .set_title("Choose a folder")
+        .pick_folder(move |folder| {
+            let _ = tx.send(folder);
+        });
     Ok(rx.await.ok().flatten().and_then(file_path_to_string))
 }
 
@@ -675,15 +751,24 @@ pub async fn pick_folder(app: AppHandle) -> AppResult<Option<String>> {
 pub async fn pick_file(app: AppHandle) -> AppResult<Option<String>> {
     use tauri_plugin_dialog::DialogExt;
     let (tx, rx) = tokio::sync::oneshot::channel();
-    app.dialog().file().set_title("Choose a file").pick_file(move |file| {
-        let _ = tx.send(file);
-    });
+    app.dialog()
+        .file()
+        .set_title("Choose a file")
+        .pick_file(move |file| {
+            let _ = tx.send(file);
+        });
     Ok(rx.await.ok().flatten().and_then(file_path_to_string))
 }
 
 #[tauri::command]
 pub fn enqueue_index_job(state: State<AppState>, project_id: String) -> AppResult<String> {
-    state.db.with(|c| db::enqueue_job(c, "index_files", serde_json::json!({"projectId": project_id})))
+    state.db.with(|c| {
+        db::enqueue_job(
+            c,
+            "index_files",
+            serde_json::json!({"projectId": project_id}),
+        )
+    })
 }
 
 #[tauri::command]
@@ -722,7 +807,11 @@ pub async fn auth_register(
 }
 
 #[tauri::command]
-pub async fn auth_login(state: State<'_, AppState>, email: String, password: String) -> AppResult<serde_json::Value> {
+pub async fn auth_login(
+    state: State<'_, AppState>,
+    email: String,
+    password: String,
+) -> AppResult<serde_json::Value> {
     crate::sync::login(&state, email, password).await
 }
 

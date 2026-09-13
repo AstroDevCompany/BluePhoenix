@@ -26,7 +26,9 @@ fn tick(state: &AppState) -> AppResult<()> {
     };
     let error = match kind.as_str() {
         "index_files" => index_files(state, &payload).err().map(|e| e.to_string()),
-        "index_documents" => crate::documents::index_document(state, &payload).err().map(|e| e.to_string()),
+        "index_documents" => crate::documents::index_document(state, &payload)
+            .err()
+            .map(|e| e.to_string()),
         "ai_generate" => None,
         other => Some(format!("Unknown job kind: {other}")),
     };

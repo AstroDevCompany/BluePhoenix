@@ -1,11 +1,10 @@
 use crate::db;
 use crate::error::{AppError, AppResult};
 use crate::models::SyncStatusDto;
+use crate::secrets;
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-
-const SERVICE: &str = "BluePhoenix";
 
 #[derive(Serialize)]
 struct AuthBody<'a> {
@@ -22,25 +21,6 @@ struct TokenRes {
     #[serde(rename = "refreshToken")]
     refresh_token: String,
     user: Option<serde_json::Value>,
-}
-
-fn keyring_set(key: &str, value: &str) -> AppResult<()> {
-    let entry = keyring::Entry::new(SERVICE, key).map_err(|e| AppError::msg(e.to_string()))?;
-    entry
-        .set_password(value)
-        .map_err(|e| AppError::msg(e.to_string()))
-}
-
-fn keyring_get(key: &str) -> Option<String> {
-    keyring::Entry::new(SERVICE, key)
-        .ok()
-        .and_then(|e| e.get_password().ok())
-}
-
-fn keyring_delete(key: &str) {
-    if let Ok(entry) = keyring::Entry::new(SERVICE, key) {
-        let _ = entry.delete_credential();
-    }
 }
 
 fn api_base(state: &AppState) -> String {
@@ -83,7 +63,11 @@ pub async fn register(
     Ok(json!({"ok": true, "user": tokens.user}))
 }
 
-pub async fn login(state: &AppState, email: String, password: String) -> AppResult<serde_json::Value> {
+pub async fn login(
+    state: &AppState,
+    email: String,
+    password: String,
+) -> AppResult<serde_json::Value> {
     let base = api_base(state);
     let res = state
         .http
@@ -108,8 +92,8 @@ pub async fn login(state: &AppState, email: String, password: String) -> AppResu
 
 pub fn logout(state: &AppState) -> AppResult<()> {
     let _ = state;
-    keyring_delete("access_token");
-    keyring_delete("refresh_token");
+    secrets::keyring_delete("access_token");
+    secrets::keyring_delete("refresh_token");
     Ok(())
 }
 
@@ -126,8 +110,8 @@ pub async fn forgot(state: &AppState, email: String) -> AppResult<()> {
 }
 
 fn persist_tokens(tokens: &TokenRes) -> AppResult<()> {
-    keyring_set("access_token", &tokens.access_token)?;
-    keyring_set("refresh_token", &tokens.refresh_token)?;
+    secrets::keyring_set("access_token", &tokens.access_token)?;
+    secrets::keyring_set("refresh_token", &tokens.refresh_token)?;
     Ok(())
 }
 
@@ -144,7 +128,7 @@ async fn claim_local(state: &AppState, access: &str) -> AppResult<()> {
 }
 
 pub async fn push_and_pull(state: &AppState) -> AppResult<SyncStatusDto> {
-    let Some(token) = keyring_get("access_token") else {
+    let Some(token) = secrets::keyring_get("access_token") else {
         return state.db.with(|c| {
             let mut status = db::sync_status(c);
             if status.pending == 0 {
@@ -184,15 +168,16 @@ pub async fn push_and_pull(state: &AppState) -> AppResult<SyncStatusDto> {
             let ids: Vec<String> = batch.into_iter().map(|b| b.0).collect();
             state.db.with(|c| db::ack_outbox(c, &ids))?;
         } else {
-            state.db.with(|c| db::set_sync_cursor(c, "metadata", None, Some("push failed")))?;
+            state
+                .db
+                .with(|c| db::set_sync_cursor(c, "metadata", None, Some("push failed")))?;
             return Err(AppError::Sync);
         }
     }
 
     let secrets = state.db.with(|c| {
-        let mut stmt = c.prepare(
-            "SELECT id, payload FROM secret_sync_outbox ORDER BY created_at LIMIT 50",
-        )?;
+        let mut stmt =
+            c.prepare("SELECT id, payload FROM secret_sync_outbox ORDER BY created_at LIMIT 50")?;
         let rows = stmt
             .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?
             .filter_map(|r| r.ok())
@@ -224,9 +209,9 @@ pub async fn push_and_pull(state: &AppState) -> AppResult<SyncStatusDto> {
         }
     }
 
-    let cursor = state
-        .db
-        .with(|c| Ok(db::sync_cursor(c, "metadata").unwrap_or_else(|| "1970-01-01T00:00:00Z".into())))?;
+    let cursor = state.db.with(|c| {
+        Ok(db::sync_cursor(c, "metadata").unwrap_or_else(|| "1970-01-01T00:00:00Z".into()))
+    })?;
     if let Ok(res) = state
         .http
         .get(format!("{base}/v1/sync/pull"))
@@ -247,7 +232,9 @@ pub async fn push_and_pull(state: &AppState) -> AppResult<SyncStatusDto> {
                     .get("cursor")
                     .and_then(|v| v.as_str())
                     .unwrap_or(&cursor);
-                state.db.with(|c| db::set_sync_cursor(c, "metadata", Some(next), None))?;
+                state
+                    .db
+                    .with(|c| db::set_sync_cursor(c, "metadata", Some(next), None))?;
             }
         }
     }
@@ -267,7 +254,9 @@ pub async fn push_and_pull(state: &AppState) -> AppResult<SyncStatusDto> {
                     .cloned()
                     .unwrap_or_default();
                 state.db.with(|c| db::apply_secret_envelopes(c, &secrets))?;
-                state.db.with(|c| db::set_sync_cursor(c, "secrets", Some("now"), None))?;
+                state
+                    .db
+                    .with(|c| db::set_sync_cursor(c, "secrets", Some("now"), None))?;
                 let _ = crate::ai::try_unwrap_with_stored_key(state);
             }
         }

@@ -37,13 +37,21 @@ pub fn bundle_to_prompt(bundle: &AiProjectBundle) -> String {
     if !bundle.todos.is_empty() {
         out.push_str("TODOs:\n");
         for t in bundle.todos.iter().take(40) {
-            out.push_str(&format!("- [{}] {} ({}/{}) {}\n", t.id, t.title, t.status, t.priority, t.description));
+            out.push_str(&format!(
+                "- [{}] {} ({}/{}) {}\n",
+                t.id, t.title, t.status, t.priority, t.description
+            ));
         }
     }
     if !bundle.versions.is_empty() {
         out.push_str("Versions / changelog snippets:\n");
         for v in bundle.versions.iter().take(8) {
-            out.push_str(&format!("- {} {}: {}\n", v.version, v.title.clone().unwrap_or_default(), truncate(&v.changelog, 400)));
+            out.push_str(&format!(
+                "- {} {}: {}\n",
+                v.version,
+                v.title.clone().unwrap_or_default(),
+                truncate(&v.changelog, 400)
+            ));
         }
     }
     if !bundle.links.is_empty() {
@@ -72,7 +80,10 @@ pub fn bundle_to_prompt(bundle: &AiProjectBundle) -> String {
     if !bundle.activity.is_empty() {
         out.push_str("Recent activity:\n");
         for a in bundle.activity.iter().take(12) {
-            out.push_str(&format!("- {} {} {}\n", a.created_at, a.event_type, a.summary));
+            out.push_str(&format!(
+                "- {} {} {}\n",
+                a.created_at, a.event_type, a.summary
+            ));
         }
     }
     out
@@ -215,7 +226,11 @@ mod tests {
 
     #[test]
     fn inspect_folder_prompt_forbids_inventing() {
-        let prompt = inspect_software_folder_prompt("Folder: demo\nREADME.md:\nhello", "Rust, TypeScript", "React");
+        let prompt = inspect_software_folder_prompt(
+            "Folder: demo\nREADME.md:\nhello",
+            "Rust, TypeScript",
+            "React",
+        );
         assert!(prompt.contains("Do not invent"));
         assert!(prompt.contains("Use only the provided excerpts"));
         assert!(prompt.contains("Allowed languages: Rust, TypeScript"));

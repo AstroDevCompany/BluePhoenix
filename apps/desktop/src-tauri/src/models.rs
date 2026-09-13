@@ -397,6 +397,12 @@ pub struct AiStatusDto {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct RevealedKeyDto {
+    pub key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AiConversationDto {
     pub id: String,
     pub project_id: Option<String>,

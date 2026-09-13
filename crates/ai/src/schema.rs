@@ -143,7 +143,12 @@ fn json_string_list(obj: &serde_json::Map<String, Value>, keys: &[&str]) -> Vec<
         if let Some(Value::Array(items)) = obj.get(*key) {
             return items
                 .iter()
-                .filter_map(|v| v.as_str().map(str::trim).filter(|s| !s.is_empty()).map(ToOwned::to_owned))
+                .filter_map(|v| {
+                    v.as_str()
+                        .map(str::trim)
+                        .filter(|s| !s.is_empty())
+                        .map(ToOwned::to_owned)
+                })
                 .collect();
         }
     }
@@ -167,7 +172,8 @@ mod tests {
 
     #[test]
     fn parses_wrapped_json() {
-        let search = parse_search("Sure.\n{\"projectIds\":[\"a\"],\"explanation\":\"match\"}\n").unwrap();
+        let search =
+            parse_search("Sure.\n{\"projectIds\":[\"a\"],\"explanation\":\"match\"}\n").unwrap();
         assert_eq!(search.project_ids, vec!["a"]);
         let todos = parse_todos("{\"todos\":[{\"title\":\"T\",\"description\":\"d\",\"priority\":\"high\",\"reasoning\":\"r\"}]}").unwrap();
         assert_eq!(todos[0].title, "T");

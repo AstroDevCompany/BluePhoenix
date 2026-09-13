@@ -3,7 +3,8 @@ use crate::models::*;
 use bluephoenix_ai::settings::AiSettings;
 use bluephoenix_ai::{MAX_MODEL_SLOTS, OPENROUTER_SECRET_KIND};
 use bluephoenix_domain::context::{
-    AiActivitySlice, AiExamSlice, AiLinkSlice, AiProjectBundle, AiTodoSlice, AiTopicSlice, AiVersionSlice, TodoFilter,
+    AiActivitySlice, AiExamSlice, AiLinkSlice, AiProjectBundle, AiTodoSlice, AiTopicSlice,
+    AiVersionSlice, TodoFilter,
 };
 use bluephoenix_domain::ids::new_id;
 use rusqlite::{params, Connection, OptionalExtension};
@@ -14,8 +15,12 @@ fn now() -> String {
 }
 
 fn setting(conn: &Connection, key: &str, default: &str) -> String {
-    conn.query_row("SELECT value FROM app_settings WHERE key = ?1", [key], |r| r.get(0))
-        .unwrap_or_else(|_| default.to_string())
+    conn.query_row(
+        "SELECT value FROM app_settings WHERE key = ?1",
+        [key],
+        |r| r.get(0),
+    )
+    .unwrap_or_else(|_| default.to_string())
 }
 
 fn set_setting(conn: &Connection, key: &str, value: &str) -> AppResult<()> {
@@ -27,7 +32,8 @@ fn set_setting(conn: &Connection, key: &str, value: &str) -> AppResult<()> {
 }
 
 pub fn load_ai_settings(conn: &Connection) -> AiSettings {
-    let models: Vec<String> = serde_json::from_str(&setting(conn, "ai.models", "[]")).unwrap_or_default();
+    let models: Vec<String> =
+        serde_json::from_str(&setting(conn, "ai.models", "[]")).unwrap_or_default();
     AiSettings {
         enabled: setting(conn, "ai.enabled", "true") != "false",
         models,
@@ -39,17 +45,33 @@ pub fn load_ai_settings(conn: &Connection) -> AiSettings {
 
 pub fn save_ai_settings(conn: &Connection, settings: &AiSettings) -> AppResult<AiSettings> {
     let settings = settings.clone().normalize();
-    set_setting(conn, "ai.enabled", if settings.enabled { "true" } else { "false" })?;
-    set_setting(conn, "ai.models", &serde_json::to_string(&settings.models).unwrap_or_else(|_| "[]".into()))?;
+    set_setting(
+        conn,
+        "ai.enabled",
+        if settings.enabled { "true" } else { "false" },
+    )?;
+    set_setting(
+        conn,
+        "ai.models",
+        &serde_json::to_string(&settings.models).unwrap_or_else(|_| "[]".into()),
+    )?;
     set_setting(
         conn,
         "ai.commitFollowStyle",
-        if settings.commit_follow_style { "true" } else { "false" },
+        if settings.commit_follow_style {
+            "true"
+        } else {
+            "false"
+        },
     )?;
     set_setting(
         conn,
         "ai.setupDismissed",
-        if settings.setup_dismissed { "true" } else { "false" },
+        if settings.setup_dismissed {
+            "true"
+        } else {
+            "false"
+        },
     )?;
     Ok(settings)
 }
@@ -68,7 +90,9 @@ pub fn account_email(conn: &Connection) -> Option<String> {
     }
 }
 
-pub fn load_openrouter_envelope(conn: &Connection) -> Option<(String, String, String, serde_json::Value)> {
+pub fn load_openrouter_envelope(
+    conn: &Connection,
+) -> Option<(String, String, String, serde_json::Value)> {
     conn.query_row(
         "SELECT id, ciphertext, nonce, wrap_params FROM encrypted_secrets WHERE kind=?1 AND deleted_at IS NULL LIMIT 1",
         [OPENROUTER_SECRET_KIND],
@@ -88,7 +112,10 @@ pub fn load_openrouter_envelope(conn: &Connection) -> Option<(String, String, St
 
 pub fn ai_project_bundle(conn: &Connection, project_id: &str) -> AppResult<AiProjectBundle> {
     let snapshot = crate::db::project_context(conn, project_id).ok();
-    let caps = snapshot.as_ref().map(|s| s.capabilities).unwrap_or_default();
+    let caps = snapshot
+        .as_ref()
+        .map(|s| s.capabilities)
+        .unwrap_or_default();
     let mut bundle = AiProjectBundle {
         snapshot,
         time_total_seconds: 0,
@@ -204,7 +231,10 @@ pub fn compact_project_index(conn: &Connection) -> AppResult<Vec<serde_json::Val
     Ok(rows.filter_map(|r| r.ok()).collect())
 }
 
-pub fn list_conversations(conn: &Connection, project_id: Option<&str>) -> AppResult<Vec<AiConversationDto>> {
+pub fn list_conversations(
+    conn: &Connection,
+    project_id: Option<&str>,
+) -> AppResult<Vec<AiConversationDto>> {
     let mut sql = String::from(
         "SELECT id, project_id, title, created_at, updated_at FROM ai_conversations ORDER BY updated_at DESC LIMIT 40",
     );
@@ -229,11 +259,17 @@ pub fn list_conversations(conn: &Connection, project_id: Option<&str>) -> AppRes
     Ok(rows)
 }
 
-pub fn ensure_conversation(conn: &Connection, conversation_id: Option<&str>, project_id: Option<&str>) -> AppResult<String> {
+pub fn ensure_conversation(
+    conn: &Connection,
+    conversation_id: Option<&str>,
+    project_id: Option<&str>,
+) -> AppResult<String> {
     if let Some(id) = conversation_id {
         if !id.is_empty() {
             let exists: Option<String> = conn
-                .query_row("SELECT id FROM ai_conversations WHERE id=?1", [id], |r| r.get(0))
+                .query_row("SELECT id FROM ai_conversations WHERE id=?1", [id], |r| {
+                    r.get(0)
+                })
                 .optional()?;
             if exists.is_some() {
                 return Ok(id.to_string());
@@ -266,7 +302,10 @@ pub fn new_conversation(conn: &Connection, project_id: Option<&str>) -> AppResul
 }
 
 pub fn clear_conversation(conn: &Connection, conversation_id: &str) -> AppResult<()> {
-    conn.execute("DELETE FROM ai_messages WHERE conversation_id=?1", [conversation_id])?;
+    conn.execute(
+        "DELETE FROM ai_messages WHERE conversation_id=?1",
+        [conversation_id],
+    )?;
     conn.execute(
         "UPDATE ai_conversations SET title='New chat', updated_at=?1 WHERE id=?2",
         params![now(), conversation_id],
@@ -331,7 +370,11 @@ pub fn upsert_document_record(
     parser: Option<&str>,
 ) -> AppResult<String> {
     let existing: Option<String> = conn
-        .query_row("SELECT id FROM document_records WHERE file_id=?1", [file_id], |r| r.get(0))
+        .query_row(
+            "SELECT id FROM document_records WHERE file_id=?1",
+            [file_id],
+            |r| r.get(0),
+        )
         .optional()?;
     let id = existing.unwrap_or_else(new_id);
     let ts = now();
@@ -352,8 +395,14 @@ pub fn replace_chunks(
     project_id: &str,
     chunks: &[(Option<String>, String, Option<i64>)],
 ) -> AppResult<()> {
-    conn.execute("DELETE FROM document_chunks WHERE record_id=?1", [record_id])?;
-    conn.execute("DELETE FROM document_chunks_fts WHERE record_id=?1", [record_id])?;
+    conn.execute(
+        "DELETE FROM document_chunks WHERE record_id=?1",
+        [record_id],
+    )?;
+    conn.execute(
+        "DELETE FROM document_chunks_fts WHERE record_id=?1",
+        [record_id],
+    )?;
     let ts = now();
     for (heading, text, page) in chunks {
         let id = new_id();
@@ -370,7 +419,12 @@ pub fn replace_chunks(
     Ok(())
 }
 
-pub fn retrieve_chunks(conn: &Connection, project_id: &str, query: &str, limit: usize) -> AppResult<Vec<DocumentChunkDto>> {
+pub fn retrieve_chunks(
+    conn: &Connection,
+    project_id: &str,
+    query: &str,
+    limit: usize,
+) -> AppResult<Vec<DocumentChunkDto>> {
     let q = query.trim();
     if q.is_empty() {
         return Ok(vec![]);
@@ -433,7 +487,10 @@ fn map_chunk(r: &rusqlite::Row<'_>) -> rusqlite::Result<DocumentChunkDto> {
     })
 }
 
-pub fn list_document_records(conn: &Connection, project_id: &str) -> AppResult<Vec<DocumentRecordDto>> {
+pub fn list_document_records(
+    conn: &Connection,
+    project_id: &str,
+) -> AppResult<Vec<DocumentRecordDto>> {
     let mut stmt = conn.prepare(
         "SELECT r.id, r.file_id, f.display_name, r.status, r.stage, r.limitation, r.parser, r.updated_at
          FROM document_records r JOIN project_files f ON f.id=r.file_id
@@ -454,7 +511,10 @@ pub fn list_document_records(conn: &Connection, project_id: &str) -> AppResult<V
     Ok(rows.filter_map(|r| r.ok()).collect())
 }
 
-pub fn file_binding(conn: &Connection, file_id: &str) -> AppResult<(String, String, Option<String>)> {
+pub fn file_binding(
+    conn: &Connection,
+    file_id: &str,
+) -> AppResult<(String, String, Option<String>)> {
     conn.query_row(
         "SELECT f.project_id, f.display_name, b.absolute_path
          FROM project_files f

@@ -1,3 +1,7 @@
+use crate::compat::{
+    self, chat_completions_body, completion_text, paid_variant, provider_error_text,
+    split_message_text,
+};
 use crate::error::{AiError, AiFailureKind, AiResult, AttemptRecord};
 use crate::fallback::FallbackOutcome;
 use crate::provider::{classify_http, AiProvider, CompletionRequest, CompletionResponse};
@@ -28,22 +32,29 @@ impl OpenRouterProvider {
     }
 
     fn body(request: &CompletionRequest) -> Value {
-        let mut body = json!({
-            "model": request.model,
-            "messages": request.messages.iter().map(|m| json!({"role": m.role, "content": m.content})).collect::<Vec<_>>(),
-            "temperature": request.temperature,
-            "max_tokens": request.max_tokens,
-        });
-        if request.json_mode {
-            body["response_format"] = json!({ "type": "json_object" });
-        }
-        body
+        chat_completions_body(request)
     }
 
     pub async fn stream(
         &self,
         request: CompletionRequest,
         mut on_delta: impl FnMut(&str) + Send,
+    ) -> AiResult<CompletionResponse> {
+        let original = request.model.clone();
+        match self.stream_once(request.clone(), &mut on_delta).await {
+            Err(err) if should_retry_paid(&original, &err) => {
+                let mut paid = request;
+                paid.model = paid_variant(&original).unwrap_or(original);
+                self.stream_once(paid, &mut on_delta).await
+            }
+            other => other,
+        }
+    }
+
+    async fn stream_once(
+        &self,
+        request: CompletionRequest,
+        on_delta: &mut (impl FnMut(&str) + Send),
     ) -> AiResult<CompletionResponse> {
         if self.api_key.trim().is_empty() {
             return Err(AiError::MissingKey);
@@ -72,15 +83,24 @@ impl OpenRouterProvider {
         if !(200..300).contains(&status) {
             let text = res.text().await.unwrap_or_default();
             let kind = classify_http(status, &text);
-            return Err(AiError::provider(kind, sanitize_provider_body(&text), Some(model)));
+            return Err(AiError::provider(
+                kind,
+                sanitize_provider_body(&text),
+                Some(model),
+            ));
         }
         let mut stream = res.bytes_stream();
         let mut buffer = String::new();
         let mut assembled = String::new();
+        let mut reasoning = String::new();
         let mut used_model = model.clone();
         while let Some(chunk) = stream.next().await {
             let bytes = chunk.map_err(|_| {
-                AiError::provider(AiFailureKind::Network, "Stream interrupted", Some(model.clone()))
+                AiError::provider(
+                    AiFailureKind::Network,
+                    "Stream interrupted",
+                    Some(model.clone()),
+                )
             })?;
             buffer.push_str(&String::from_utf8_lossy(&bytes));
             while let Some(idx) = buffer.find('\n') {
@@ -89,9 +109,19 @@ impl OpenRouterProvider {
                 if line.is_empty() {
                     continue;
                 }
+                if let Some(err) = sse_error_message(&line) {
+                    return Err(AiError::provider(
+                        classify_http(502, &err),
+                        provider_error_text(&err),
+                        Some(model.clone()),
+                    ));
+                }
                 if let Some((delta, maybe_model, done)) = parse_sse_delta(&line) {
                     if let Some(m) = maybe_model {
                         used_model = m;
+                    }
+                    if let Some(hidden) = sse_reasoning_delta(&line) {
+                        reasoning.push_str(&hidden);
                     }
                     if !delta.is_empty() {
                         assembled.push_str(&delta);
@@ -102,6 +132,11 @@ impl OpenRouterProvider {
                     }
                 }
             }
+        }
+        if assembled.trim().is_empty() {
+            assembled = compat::strip_thinking_wrappers(&reasoning);
+        } else {
+            assembled = compat::strip_thinking_wrappers(&assembled);
         }
         if assembled.is_empty() {
             return Err(AiError::provider(
@@ -121,6 +156,20 @@ impl OpenRouterProvider {
 #[async_trait]
 impl AiProvider for OpenRouterProvider {
     async fn complete(&self, request: CompletionRequest) -> AiResult<CompletionResponse> {
+        let original = request.model.clone();
+        match self.complete_once(&request).await {
+            Err(err) if should_retry_paid(&original, &err) => {
+                let mut paid = request;
+                paid.model = paid_variant(&original).unwrap_or(original);
+                self.complete_once(&paid).await
+            }
+            other => other,
+        }
+    }
+}
+
+impl OpenRouterProvider {
+    async fn complete_once(&self, request: &CompletionRequest) -> AiResult<CompletionResponse> {
         if self.api_key.trim().is_empty() {
             return Err(AiError::MissingKey);
         }
@@ -131,7 +180,7 @@ impl AiProvider for OpenRouterProvider {
             .bearer_auth(&self.api_key)
             .header("HTTP-Referer", "https://bluephoenix.app")
             .header("X-Title", "BluePhoenix")
-            .json(&Self::body(&request))
+            .json(&Self::body(request))
             .send()
             .await
             .map_err(|err| {
@@ -150,6 +199,45 @@ impl AiProvider for OpenRouterProvider {
             return Err(AiError::provider(kind, snippet, Some(model)));
         }
         parse_completion(&text, &model)
+    }
+}
+
+fn should_retry_paid(model: &str, err: &AiError) -> bool {
+    if paid_variant(model).is_none() {
+        return false;
+    }
+    match err {
+        AiError::Provider { kind, message, .. } => {
+            *kind == AiFailureKind::RateLimit || crate::compat::looks_like_rate_limit(message)
+        }
+        _ => false,
+    }
+}
+
+fn sse_error_message(line: &str) -> Option<String> {
+    let data = line.strip_prefix("data:")?.trim();
+    if data == "[DONE]" {
+        return None;
+    }
+    let value: Value = serde_json::from_str(data).ok()?;
+    if value.get("error").is_some() {
+        Some(data.to_string())
+    } else {
+        None
+    }
+}
+
+fn sse_reasoning_delta(line: &str) -> Option<String> {
+    let data = line.strip_prefix("data:")?.trim();
+    if data == "[DONE]" {
+        return None;
+    }
+    let value: Value = serde_json::from_str(data).ok()?;
+    let hidden = split_message_text(value.pointer("/choices/0/delta")?).hidden;
+    if hidden.is_empty() {
+        None
+    } else {
+        Some(hidden)
     }
 }
 
@@ -179,7 +267,10 @@ pub async fn stream_with_fallback(
                 return Ok(FallbackOutcome {
                     fallback_used: index > 0,
                     attempted: {
-                        let mut used: Vec<String> = attempts.iter().map(|a: &AttemptRecord| a.model.clone()).collect();
+                        let mut used: Vec<String> = attempts
+                            .iter()
+                            .map(|a: &AttemptRecord| a.model.clone())
+                            .collect();
                         used.push(model.clone());
                         used
                     },
@@ -208,12 +299,17 @@ pub fn parse_sse_delta(line: &str) -> Option<(String, Option<String>, bool)> {
         return Some((String::new(), None, true));
     }
     let value: Value = serde_json::from_str(data).ok()?;
+    if value.get("error").is_some() {
+        return None;
+    }
     let delta = value
-        .pointer("/choices/0/delta/content")
+        .pointer("/choices/0/delta")
+        .map(|node| split_message_text(node).visible)
+        .unwrap_or_default();
+    let model = value
+        .get("model")
         .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    let model = value.get("model").and_then(|v| v.as_str()).map(|s| s.to_string());
+        .map(|s| s.to_string());
     let done = value
         .pointer("/choices/0/finish_reason")
         .and_then(|v| v.as_str())
@@ -223,27 +319,27 @@ pub fn parse_sse_delta(line: &str) -> Option<(String, Option<String>, bool)> {
 
 pub fn parse_completion(body: &str, model: &str) -> AiResult<CompletionResponse> {
     let value: Value = serde_json::from_str(body).map_err(|_| {
-        AiError::provider(AiFailureKind::Malformed, "Provider returned invalid JSON", Some(model.into()))
+        AiError::provider(
+            AiFailureKind::Malformed,
+            "Provider returned invalid JSON",
+            Some(model.into()),
+        )
     })?;
-    let text = value
-        .pointer("/choices/0/message/content")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string())
-        .or_else(|| {
-            value
-                .pointer("/choices/0/message/content")
-                .and_then(|v| v.as_array())
-                .map(|parts| {
-                    parts
-                        .iter()
-                        .filter_map(|p| p.get("text").and_then(|t| t.as_str()))
-                        .collect::<Vec<_>>()
-                        .join("")
-                })
-        })
-        .ok_or_else(|| {
-            AiError::provider(AiFailureKind::Malformed, "Provider response had no text", Some(model.into()))
-        })?;
+    if value.get("error").is_some() && value.pointer("/choices/0").is_none() {
+        return Err(AiError::provider(
+            classify_http(502, body),
+            provider_error_text(body),
+            Some(model.into()),
+        ));
+    }
+    let text = completion_text(&value);
+    if text.trim().is_empty() {
+        return Err(AiError::provider(
+            AiFailureKind::Malformed,
+            "Provider response had no text",
+            Some(model.into()),
+        ));
+    }
     let used_model = value
         .get("model")
         .and_then(|v| v.as_str())
@@ -260,27 +356,7 @@ pub fn parse_completion(body: &str, model: &str) -> AiResult<CompletionResponse>
 }
 
 fn sanitize_provider_body(body: &str) -> String {
-    let lower = body.to_lowercase();
-    if lower.contains("sk-or-") || lower.contains("authorization") {
-        return "OpenRouter rejected the request".into();
-    }
-    serde_json::from_str::<Value>(body)
-        .ok()
-        .and_then(|v| {
-            v.pointer("/error/message")
-                .and_then(|m| m.as_str())
-                .map(|s| s.to_string())
-        })
-        .unwrap_or_else(|| {
-            let trimmed = body.trim();
-            if trimmed.len() > 180 {
-                format!("{}…", &trimmed[..180])
-            } else if trimmed.is_empty() {
-                "OpenRouter request failed".into()
-            } else {
-                trimmed.to_string()
-            }
-        })
+    provider_error_text(body)
 }
 
 #[cfg(test)]
@@ -289,7 +365,8 @@ mod tests {
 
     #[test]
     fn parses_chat_completion() {
-        let body = r#"{"model":"x","choices":[{"message":{"content":"ok"},"finish_reason":"stop"}]}"#;
+        let body =
+            r#"{"model":"x","choices":[{"message":{"content":"ok"},"finish_reason":"stop"}]}"#;
         let parsed = parse_completion(body, "fallback").unwrap();
         assert_eq!(parsed.text, "ok");
         assert_eq!(parsed.model, "x");
@@ -297,14 +374,63 @@ mod tests {
 
     #[test]
     fn parses_sse_and_done() {
-        let (delta, model, done) = parse_sse_delta(
-            r#"data: {"model":"m","choices":[{"delta":{"content":"Hi"}}]}"#,
-        )
-        .unwrap();
+        let (delta, model, done) =
+            parse_sse_delta(r#"data: {"model":"m","choices":[{"delta":{"content":"Hi"}}]}"#)
+                .unwrap();
         assert_eq!(delta, "Hi");
         assert_eq!(model.as_deref(), Some("m"));
         assert!(!done);
         let done = parse_sse_delta("data: [DONE]").unwrap();
         assert!(done.2);
+    }
+
+    #[test]
+    fn parses_array_content_and_reasoning_fallback() {
+        let claude = r#"{"model":"anthropic/claude-sonnet-4.5","choices":[{"message":{"content":[{"type":"text","text":"{\"ok\":true}"}]},"finish_reason":"stop"}]}"#;
+        assert_eq!(
+            parse_completion(claude, "fallback").unwrap().text,
+            "{\"ok\":true}"
+        );
+
+        let qwen = r#"{"model":"qwen/qwen3-32b","choices":[{"message":{"content":"","reasoning_content":"{\"ok\":true}"},"finish_reason":"stop"}]}"#;
+        assert_eq!(
+            parse_completion(qwen, "fallback").unwrap().text,
+            "{\"ok\":true}"
+        );
+
+        let gemini = r#"{"model":"google/gemini-2.5-flash","choices":[{"message":{"content":[{"type":"text","text":"hi"}]},"finish_reason":"stop"}]}"#;
+        assert_eq!(parse_completion(gemini, "fallback").unwrap().text, "hi");
+
+        let gpt = r#"{"model":"openai/gpt-5","choices":[{"message":{"content":[{"type":"output_text","text":"done"}]},"finish_reason":"stop"}]}"#;
+        assert_eq!(parse_completion(gpt, "fallback").unwrap().text, "done");
+
+        let deepseek = r#"{"model":"deepseek/deepseek-r1","choices":[{"message":{"content":"4","reasoning_content":"count"},"finish_reason":"stop"}]}"#;
+        assert_eq!(parse_completion(deepseek, "fallback").unwrap().text, "4");
+
+        let gemma = r#"{"model":"google/gemma-4-31b-it:free","choices":[{"message":{"content":"<|channel>thought\nplan\n<channel|>{\"ok\":true}"},"finish_reason":"stop"}]}"#;
+        assert_eq!(
+            parse_completion(gemma, "fallback").unwrap().text,
+            "{\"ok\":true}"
+        );
+    }
+
+    #[test]
+    fn parses_sse_array_delta() {
+        let (delta, _, _) = parse_sse_delta(
+            r#"data: {"choices":[{"delta":{"content":[{"type":"text","text":"Hi"}]}}]}"#,
+        )
+        .unwrap();
+        assert_eq!(delta, "Hi");
+    }
+
+    #[test]
+    fn retries_paid_slug_on_free_upstream_cap() {
+        let err = AiError::provider(
+            AiFailureKind::RateLimit,
+            "google/gemma-4-31b-it:free is temporarily rate-limited upstream",
+            Some("google/gemma-4-31b-it:free".into()),
+        );
+        assert!(should_retry_paid("google/gemma-4-31b-it:free", &err));
+        assert!(!should_retry_paid("google/gemma-4-31b-it", &err));
     }
 }

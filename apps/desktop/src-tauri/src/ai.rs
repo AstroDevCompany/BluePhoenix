@@ -7,9 +7,9 @@ use crate::state::AppState;
 use bluephoenix_ai::prompts;
 use bluephoenix_ai::settings::AiSettings;
 use bluephoenix_ai::{
-    complete_with_fallback, parse_agent_prompt, parse_changelog, parse_commit, parse_prioritize, parse_search,
-    parse_software_folder_draft, parse_todos, require_ready, stream_with_fallback, ChatMessage, CompletionRequest,
-    OpenRouterProvider, OPENROUTER_SECRET_KIND,
+    complete_with_fallback, parse_agent_prompt, parse_changelog, parse_commit, parse_prioritize,
+    parse_search, parse_software_folder_draft, parse_todos, require_ready, stream_with_fallback,
+    ChatMessage, CompletionRequest, OpenRouterProvider, OPENROUTER_SECRET_KIND,
 };
 use bluephoenix_domain::ids::CategoryKind;
 use serde::Deserialize;
@@ -22,20 +22,27 @@ fn map_ai(err: bluephoenix_ai::AiError) -> AppError {
 
 fn load_ready(state: &AppState) -> AppResult<(OpenRouterProvider, AiSettings, Vec<String>)> {
     let settings = state.db.with(|c| Ok(ai_store::load_ai_settings(c)))?;
-    let key = secrets::openrouter_key().ok_or_else(|| map_ai(bluephoenix_ai::AiError::MissingKey))?;
+    let key =
+        secrets::openrouter_key().ok_or_else(|| map_ai(bluephoenix_ai::AiError::MissingKey))?;
     require_ready(&settings, true).map_err(map_ai)?;
     let models = settings.active_models();
     Ok((OpenRouterProvider::new(key), settings, models))
 }
 
-async fn complete_text(state: &AppState, messages: Vec<ChatMessage>, json_mode: bool) -> AppResult<bluephoenix_ai::FallbackOutcome> {
+async fn complete_text(
+    state: &AppState,
+    messages: Vec<ChatMessage>,
+    json_mode: bool,
+) -> AppResult<bluephoenix_ai::FallbackOutcome> {
     let (provider, _settings, models) = load_ready(state)?;
     let request = if json_mode {
         CompletionRequest::json(models.first().cloned().unwrap_or_default(), messages)
     } else {
         CompletionRequest::chat(models.first().cloned().unwrap_or_default(), messages)
     };
-    complete_with_fallback(&provider, &models, request).await.map_err(map_ai)
+    complete_with_fallback(&provider, &models, request)
+        .await
+        .map_err(map_ai)
 }
 
 fn persist_openrouter_envelope(state: &AppState, plaintext: &str) -> AppResult<()> {
@@ -43,9 +50,9 @@ fn persist_openrouter_envelope(state: &AppState, plaintext: &str) -> AppResult<(
         return Ok(());
     }
     let (ciphertext, nonce, wrap_params) = secrets::encrypt_secret(plaintext)?;
-    state
-        .db
-        .with(|c| db::store_secret_envelope(c, OPENROUTER_SECRET_KIND, &ciphertext, &nonce, wrap_params))?;
+    state.db.with(|c| {
+        db::store_secret_envelope(c, OPENROUTER_SECRET_KIND, &ciphertext, &nonce, wrap_params)
+    })?;
     Ok(())
 }
 
@@ -55,7 +62,10 @@ pub fn try_unwrap_after_auth(state: &AppState, email: &str, password: &str) -> A
     if secrets::has_openrouter_key() {
         return Ok(());
     }
-    if let Some((_, ct, nonce, params)) = state.db.with(|c| Ok(ai_store::load_openrouter_envelope(c)))? {
+    if let Some((_, ct, nonce, params)) = state
+        .db
+        .with(|c| Ok(ai_store::load_openrouter_envelope(c)))?
+    {
         if let Ok(plain) = secrets::decrypt_secret(&ct, &nonce, &params, password, email) {
             secrets::keyring_set(secrets::OPENROUTER_KEY, &plain)?;
         }
@@ -67,7 +77,10 @@ pub fn try_unwrap_with_stored_key(state: &AppState) -> AppResult<()> {
     if secrets::has_openrouter_key() || !secrets::wrap_key_available() {
         return Ok(());
     }
-    if let Some((_, ct, nonce, _)) = state.db.with(|c| Ok(ai_store::load_openrouter_envelope(c)))? {
+    if let Some((_, ct, nonce, _)) = state
+        .db
+        .with(|c| Ok(ai_store::load_openrouter_envelope(c)))?
+    {
         if let Ok(plain) = secrets::decrypt_with_stored_key(&ct, &nonce) {
             secrets::keyring_set(secrets::OPENROUTER_KEY, &plain)?;
         }
@@ -105,6 +118,11 @@ pub fn ai_set_key(state: State<AppState>, key: String) -> AppResult<AiStatusDto>
     if key.is_empty() {
         return Err(AppError::msg("API key is required"));
     }
+    if key.contains(char::is_whitespace) {
+        return Err(AppError::msg(
+            "That does not look like an OpenRouter API key",
+        ));
+    }
     secrets::keyring_set(secrets::OPENROUTER_KEY, &key)?;
     persist_openrouter_envelope(&state, &key)?;
     ai_status(state)
@@ -117,8 +135,9 @@ pub fn ai_clear_key(state: State<AppState>) -> AppResult<AiStatusDto> {
 }
 
 #[tauri::command]
-pub fn ai_reveal_key() -> AppResult<String> {
-    secrets::openrouter_key().ok_or_else(|| AppError::msg("No API key is stored"))
+pub fn ai_reveal_key() -> AppResult<RevealedKeyDto> {
+    let key = secrets::openrouter_key().ok_or_else(|| AppError::msg("No API key is stored"))?;
+    Ok(RevealedKeyDto { key })
 }
 
 #[tauri::command]
@@ -155,7 +174,11 @@ pub struct ChatInput {
 }
 
 #[tauri::command]
-pub async fn ai_chat_stream(app: AppHandle, state: State<'_, AppState>, input: ChatInput) -> AppResult<AiMessageDto> {
+pub async fn ai_chat_stream(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: ChatInput,
+) -> AppResult<AiMessageDto> {
     let message = input.message.trim().to_string();
     if message.is_empty() {
         return Err(AppError::msg("Message is required"));
@@ -167,13 +190,18 @@ pub async fn ai_chat_stream(app: AppHandle, state: State<'_, AppState>, input: C
     state
         .db
         .with(|c| ai_store::insert_message(c, &conversation_id, "user", &message, None, false))?;
-    let history = state.db.with(|c| ai_store::list_messages(c, &conversation_id))?;
+    let history = state
+        .db
+        .with(|c| ai_store::list_messages(c, &conversation_id))?;
     let bundle = if let Some(pid) = &project_id {
         state.db.with(|c| ai_store::ai_project_bundle(c, pid)).ok()
     } else {
         None
     };
-    let kind = bundle.as_ref().and_then(|b| b.snapshot.as_ref()).map(|s| s.kind);
+    let kind = bundle
+        .as_ref()
+        .and_then(|b| b.snapshot.as_ref())
+        .map(|s| s.kind);
     let mut system = prompts::chat_system(kind);
     if let Some(bundle) = &bundle {
         system.push_str("\n\nProject context:\n");
@@ -205,7 +233,14 @@ pub async fn ai_chat_stream(app: AppHandle, state: State<'_, AppState>, input: C
         role: "system".into(),
         content: system,
     }];
-    for m in history.iter().rev().take(16).collect::<Vec<_>>().into_iter().rev() {
+    for m in history
+        .iter()
+        .rev()
+        .take(16)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+    {
         if m.role == "system" {
             continue;
         }
@@ -244,7 +279,9 @@ pub async fn ai_chat_stream(app: AppHandle, state: State<'_, AppState>, input: C
             "fallbackUsed": outcome.fallback_used,
         }),
     );
-    let messages = state.db.with(|c| ai_store::list_messages(c, &conversation_id))?;
+    let messages = state
+        .db
+        .with(|c| ai_store::list_messages(c, &conversation_id))?;
     messages
         .into_iter()
         .find(|m| m.id == assistant_id)
@@ -252,25 +289,40 @@ pub async fn ai_chat_stream(app: AppHandle, state: State<'_, AppState>, input: C
 }
 
 #[tauri::command]
-pub fn ai_list_conversations(state: State<AppState>, project_id: Option<String>) -> AppResult<Vec<AiConversationDto>> {
+pub fn ai_list_conversations(
+    state: State<AppState>,
+    project_id: Option<String>,
+) -> AppResult<Vec<AiConversationDto>> {
     state
         .db
         .with(|c| ai_store::list_conversations(c, project_id.as_deref()))
 }
 
 #[tauri::command]
-pub fn ai_list_messages(state: State<AppState>, conversation_id: String) -> AppResult<Vec<AiMessageDto>> {
-    state.db.with(|c| ai_store::list_messages(c, &conversation_id))
+pub fn ai_list_messages(
+    state: State<AppState>,
+    conversation_id: String,
+) -> AppResult<Vec<AiMessageDto>> {
+    state
+        .db
+        .with(|c| ai_store::list_messages(c, &conversation_id))
 }
 
 #[tauri::command]
-pub fn ai_new_conversation(state: State<AppState>, project_id: Option<String>) -> AppResult<String> {
-    state.db.with(|c| ai_store::new_conversation(c, project_id.as_deref()))
+pub fn ai_new_conversation(
+    state: State<AppState>,
+    project_id: Option<String>,
+) -> AppResult<String> {
+    state
+        .db
+        .with(|c| ai_store::new_conversation(c, project_id.as_deref()))
 }
 
 #[tauri::command]
 pub fn ai_clear_conversation(state: State<AppState>, conversation_id: String) -> AppResult<()> {
-    state.db.with(|c| ai_store::clear_conversation(c, &conversation_id))
+    state
+        .db
+        .with(|c| ai_store::clear_conversation(c, &conversation_id))
 }
 
 #[tauri::command]
@@ -278,11 +330,16 @@ pub fn ai_project_bundle(
     state: State<AppState>,
     project_id: String,
 ) -> AppResult<bluephoenix_domain::context::AiProjectBundle> {
-    state.db.with(|c| ai_store::ai_project_bundle(c, &project_id))
+    state
+        .db
+        .with(|c| ai_store::ai_project_bundle(c, &project_id))
 }
 
 #[tauri::command]
-pub async fn ai_interpret_search(state: State<'_, AppState>, query: String) -> AppResult<serde_json::Value> {
+pub async fn ai_interpret_search(
+    state: State<'_, AppState>,
+    query: String,
+) -> AppResult<serde_json::Value> {
     let local = state.db.with(|c| db::search(c, &query))?;
     let settings = state.db.with(|c| Ok(ai_store::load_ai_settings(c)))?;
     if require_ready(&settings, secrets::has_openrouter_key()).is_err() {
@@ -298,7 +355,10 @@ pub async fn ai_interpret_search(state: State<'_, AppState>, query: String) -> A
             },
             ChatMessage {
                 role: "user".into(),
-                content: prompts::search_prompt(&serde_json::to_string(&index).unwrap_or_default(), &query),
+                content: prompts::search_prompt(
+                    &serde_json::to_string(&index).unwrap_or_default(),
+                    &query,
+                ),
             },
         ],
         true,
@@ -317,15 +377,22 @@ pub async fn ai_interpret_search(state: State<'_, AppState>, query: String) -> A
 fn require_software(state: &AppState, project_id: &str) -> AppResult<CategoryKind> {
     let kind = state.db.with(|c| db::project_kind(c, project_id))?;
     if kind != CategoryKind::Software {
-        return Err(AppError::msg("This action is available on software projects"));
+        return Err(AppError::msg(
+            "This action is available on software projects",
+        ));
     }
     Ok(kind)
 }
 
 #[tauri::command]
-pub async fn ai_prioritize_todos(state: State<'_, AppState>, project_id: String) -> AppResult<serde_json::Value> {
+pub async fn ai_prioritize_todos(
+    state: State<'_, AppState>,
+    project_id: String,
+) -> AppResult<serde_json::Value> {
     require_software(&state, &project_id)?;
-    let bundle = state.db.with(|c| ai_store::ai_project_bundle(c, &project_id))?;
+    let bundle = state
+        .db
+        .with(|c| ai_store::ai_project_bundle(c, &project_id))?;
     let json_todos = serde_json::to_string(&bundle.todos).unwrap_or_else(|_| "[]".into());
     let outcome = complete_text(
         &state,
@@ -342,8 +409,11 @@ pub async fn ai_prioritize_todos(state: State<'_, AppState>, project_id: String)
         true,
     )
     .await?;
-    let parsed = parse_prioritize(&outcome.response.text).ok_or_else(|| AppError::msg("Model returned invalid JSON"))?;
-    Ok(json!({ "result": parsed, "fallbackUsed": outcome.fallback_used, "model": outcome.response.model }))
+    let parsed = parse_prioritize(&outcome.response.text)
+        .ok_or_else(|| AppError::msg("Model returned invalid JSON"))?;
+    Ok(
+        json!({ "result": parsed, "fallbackUsed": outcome.fallback_used, "model": outcome.response.model }),
+    )
 }
 
 #[tauri::command]
@@ -363,9 +433,15 @@ pub fn ai_apply_todo_priorities(state: State<AppState>, order: Vec<String>) -> A
 }
 
 #[tauri::command]
-pub async fn ai_generate_prompt(state: State<'_, AppState>, project_id: String, extra: Option<String>) -> AppResult<serde_json::Value> {
+pub async fn ai_generate_prompt(
+    state: State<'_, AppState>,
+    project_id: String,
+    extra: Option<String>,
+) -> AppResult<serde_json::Value> {
     require_software(&state, &project_id)?;
-    let bundle = state.db.with(|c| ai_store::ai_project_bundle(c, &project_id))?;
+    let bundle = state
+        .db
+        .with(|c| ai_store::ai_project_bundle(c, &project_id))?;
     let outcome = complete_text(
         &state,
         vec![
@@ -375,24 +451,39 @@ pub async fn ai_generate_prompt(state: State<'_, AppState>, project_id: String, 
             },
             ChatMessage {
                 role: "user".into(),
-                content: prompts::agent_prompt_builder(&prompts::bundle_to_prompt(&bundle), extra.as_deref().unwrap_or("")),
+                content: prompts::agent_prompt_builder(
+                    &prompts::bundle_to_prompt(&bundle),
+                    extra.as_deref().unwrap_or(""),
+                ),
             },
         ],
         true,
     )
     .await?;
-    let parsed = parse_agent_prompt(&outcome.response.text).ok_or_else(|| AppError::msg("Model returned invalid JSON"))?;
+    let parsed = parse_agent_prompt(&outcome.response.text)
+        .ok_or_else(|| AppError::msg("Model returned invalid JSON"))?;
     Ok(json!({ "result": parsed, "fallbackUsed": outcome.fallback_used }))
 }
 
 #[tauri::command]
-pub async fn ai_summarize_changelog(state: State<'_, AppState>, project_id: String, version_id: Option<String>) -> AppResult<String> {
+pub async fn ai_summarize_changelog(
+    state: State<'_, AppState>,
+    project_id: String,
+    version_id: Option<String>,
+) -> AppResult<String> {
     require_software(&state, &project_id)?;
     let versions = state.db.with(|c| db::list_versions(c, &project_id))?;
     let body = if let Some(id) = version_id {
-        versions.iter().find(|v| v.id == id).map(|v| v.changelog.clone()).unwrap_or_default()
+        versions
+            .iter()
+            .find(|v| v.id == id)
+            .map(|v| v.changelog.clone())
+            .unwrap_or_default()
     } else {
-        versions.first().map(|v| v.changelog.clone()).unwrap_or_default()
+        versions
+            .first()
+            .map(|v| v.changelog.clone())
+            .unwrap_or_default()
     };
     if body.trim().is_empty() {
         return Err(AppError::msg("No changelog text to summarize"));
@@ -410,7 +501,10 @@ pub async fn ai_summarize_changelog(state: State<'_, AppState>, project_id: Stri
 }
 
 #[tauri::command]
-pub async fn ai_generate_changelog(state: State<'_, AppState>, project_id: String) -> AppResult<serde_json::Value> {
+pub async fn ai_generate_changelog(
+    state: State<'_, AppState>,
+    project_id: String,
+) -> AppResult<serde_json::Value> {
     require_software(&state, &project_id)?;
     let (git_path, folder, versions) = state.db.with(|c| {
         let git = db::load_settings(c).git_path;
@@ -441,12 +535,17 @@ pub async fn ai_generate_changelog(state: State<'_, AppState>, project_id: Strin
         true,
     )
     .await?;
-    let parsed = parse_changelog(&outcome.response.text).ok_or_else(|| AppError::msg("Model returned invalid JSON"))?;
+    let parsed = parse_changelog(&outcome.response.text)
+        .ok_or_else(|| AppError::msg("Model returned invalid JSON"))?;
     Ok(json!({ "result": parsed, "gitLog": log, "fallbackUsed": outcome.fallback_used }))
 }
 
 #[tauri::command]
-pub async fn ai_todos_from_changelog(state: State<'_, AppState>, project_id: String, changelog: String) -> AppResult<serde_json::Value> {
+pub async fn ai_todos_from_changelog(
+    state: State<'_, AppState>,
+    project_id: String,
+    changelog: String,
+) -> AppResult<serde_json::Value> {
     require_software(&state, &project_id)?;
     let outcome = complete_text(
         &state,
@@ -463,12 +562,16 @@ pub async fn ai_todos_from_changelog(state: State<'_, AppState>, project_id: Str
         true,
     )
     .await?;
-    let parsed = parse_todos(&outcome.response.text).ok_or_else(|| AppError::msg("Model returned invalid JSON"))?;
+    let parsed = parse_todos(&outcome.response.text)
+        .ok_or_else(|| AppError::msg("Model returned invalid JSON"))?;
     Ok(json!({ "todos": parsed, "fallbackUsed": outcome.fallback_used }))
 }
 
 #[tauri::command]
-pub async fn ai_suggest_commit(state: State<'_, AppState>, project_id: String) -> AppResult<serde_json::Value> {
+pub async fn ai_suggest_commit(
+    state: State<'_, AppState>,
+    project_id: String,
+) -> AppResult<serde_json::Value> {
     require_software(&state, &project_id)?;
     let (git_path, folder, follow) = state.db.with(|c| {
         let settings = db::load_settings(c);
@@ -497,7 +600,8 @@ pub async fn ai_suggest_commit(state: State<'_, AppState>, project_id: String) -
         true,
     )
     .await?;
-    let parsed = parse_commit(&outcome.response.text).ok_or_else(|| AppError::msg("Model returned invalid JSON"))?;
+    let parsed = parse_commit(&outcome.response.text)
+        .ok_or_else(|| AppError::msg("Model returned invalid JSON"))?;
     Ok(json!({
         "result": parsed,
         "styleFollowed": follow && ctx.has_history,
@@ -508,17 +612,17 @@ pub async fn ai_suggest_commit(state: State<'_, AppState>, project_id: String) -
 }
 
 #[tauri::command]
-pub async fn ai_inspect_software_folder(state: State<'_, AppState>, local_path: String) -> AppResult<serde_json::Value> {
+pub async fn ai_inspect_software_folder(
+    state: State<'_, AppState>,
+    local_path: String,
+) -> AppResult<serde_json::Value> {
     let path = std::path::PathBuf::from(local_path.trim());
     if local_path.trim().is_empty() {
         return Err(AppError::FolderMissing);
     }
-    let (git_path, tags) = state.db.with(|c| {
-        Ok((
-            db::load_settings(c).git_path,
-            db::list_tags(c)?,
-        ))
-    })?;
+    let (git_path, tags) = state
+        .db
+        .with(|c| Ok((db::load_settings(c).git_path, db::list_tags(c)?)))?;
     let facts = crate::project_facts::collect(&path, &git_path)?;
     let languages: Vec<String> = tags
         .iter()
@@ -535,7 +639,9 @@ pub async fn ai_inspect_software_folder(state: State<'_, AppState>, local_path: 
         vec![
             ChatMessage {
                 role: "system".into(),
-                content: "Return JSON only. Extract from excerpts. Never invent. Never write files.".into(),
+                content:
+                    "Return JSON only. Extract from excerpts. Never invent. Never write files."
+                        .into(),
             },
             ChatMessage {
                 role: "user".into(),
@@ -578,7 +684,11 @@ pub async fn ai_inspect_software_folder(state: State<'_, AppState>, local_path: 
 fn map_tag_ids(tags: &[TagDto], names: &[String], kind: &str) -> Vec<String> {
     let mut ids = Vec::new();
     for name in names {
-        let Some(id) = tags.iter().find(|t| t.kind == kind && t.name.eq_ignore_ascii_case(name.trim())).map(|t| t.id.clone()) else {
+        let Some(id) = tags
+            .iter()
+            .find(|t| t.kind == kind && t.name.eq_ignore_ascii_case(name.trim()))
+            .map(|t| t.id.clone())
+        else {
             continue;
         };
         if !ids.contains(&id) {
@@ -594,12 +704,19 @@ pub fn git_log(state: State<AppState>, project_id: String) -> AppResult<Vec<Stri
         let git = db::load_settings(c).git_path;
         let (local, _) = db::project_binding(c, &state.db.device_id, &project_id);
         let path = local.ok_or(AppError::FolderMissing)?;
-        Ok(crate::git::recent_subjects(&git, std::path::Path::new(&path), 20))
+        Ok(crate::git::recent_subjects(
+            &git,
+            std::path::Path::new(&path),
+            20,
+        ))
     })
 }
 
 #[tauri::command]
-pub fn git_diff(state: State<AppState>, project_id: String) -> AppResult<crate::git::GitDiffContext> {
+pub fn git_diff(
+    state: State<AppState>,
+    project_id: String,
+) -> AppResult<crate::git::GitDiffContext> {
     state.db.with(|c| {
         let git = db::load_settings(c).git_path;
         let (local, _) = db::project_binding(c, &state.db.device_id, &project_id);
@@ -609,8 +726,13 @@ pub fn git_diff(state: State<AppState>, project_id: String) -> AppResult<crate::
 }
 
 #[tauri::command]
-pub fn list_document_records(state: State<AppState>, project_id: String) -> AppResult<Vec<DocumentRecordDto>> {
-    state.db.with(|c| ai_store::list_document_records(c, &project_id))
+pub fn list_document_records(
+    state: State<AppState>,
+    project_id: String,
+) -> AppResult<Vec<DocumentRecordDto>> {
+    state
+        .db
+        .with(|c| ai_store::list_document_records(c, &project_id))
 }
 
 #[cfg(test)]

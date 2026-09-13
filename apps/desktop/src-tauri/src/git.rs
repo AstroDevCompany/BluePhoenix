@@ -92,8 +92,7 @@ fn stdout(git: &str, repo: &Path, args: &[&str]) -> Option<String> {
         .output()
         .ok()?;
     if output.status.success() {
-        Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
-            .filter(|s| !s.is_empty())
+        Some(String::from_utf8_lossy(&output.stdout).trim().to_string()).filter(|s| !s.is_empty())
     } else {
         None
     }
@@ -143,7 +142,11 @@ pub fn github_https_url(remote: &str) -> Option<String> {
 }
 
 fn ahead_behind(git: &str, repo: &Path) -> (i64, i64) {
-    let Some(raw) = stdout(git, repo, &["rev-list", "--left-right", "--count", "@{u}...HEAD"]) else {
+    let Some(raw) = stdout(
+        git,
+        repo,
+        &["rev-list", "--left-right", "--count", "@{u}...HEAD"],
+    ) else {
         return (0, 0);
     };
     let parts: Vec<_> = raw.split_whitespace().collect();
@@ -175,7 +178,9 @@ pub fn run_git(configured: &str, repo: &Path, args: &[&str]) -> AppResult<String
     } else {
         let combined = format!("{}{}", stdout, stderr).to_lowercase();
         if combined.contains("conflict") {
-            return Err(AppError::msg("Merge conflicts — resolve them before continuing"));
+            return Err(AppError::msg(
+                "Merge conflicts — resolve them before continuing",
+            ));
         }
         if combined.contains("authentication") || combined.contains("permission denied") {
             return Err(AppError::msg("Git authentication failed"));

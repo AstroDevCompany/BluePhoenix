@@ -38,7 +38,9 @@ pub fn run() {
         .setup(|app| {
             #[cfg(desktop)]
             {
-                let _ = app.handle().plugin(tauri_plugin_updater::Builder::new().build());
+                let _ = app
+                    .handle()
+                    .plugin(tauri_plugin_updater::Builder::new().build());
                 let _ = app.handle().plugin(tauri_plugin_autostart::init(
                     tauri_plugin_autostart::MacosLauncher::LaunchAgent,
                     None,
@@ -51,6 +53,7 @@ pub fn run() {
                 .build()
                 .expect("http");
             app.manage(AppState { db, http });
+            crate::secrets::init(&dir);
             crate::jobs::spawn(app.handle().clone());
             #[cfg(desktop)]
             {

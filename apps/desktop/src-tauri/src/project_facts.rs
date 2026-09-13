@@ -98,12 +98,20 @@ pub fn collect(path: &Path, git_bin: &str) -> AppResult<ProjectFacts> {
 
 pub fn merge_draft(facts: &ProjectFacts, model: SoftwareFolderDraft) -> SoftwareFolderDraft {
     SoftwareFolderDraft {
-        name: prefer_nonempty(facts.name.clone(), model.name).unwrap_or_else(|| facts.folder_name.clone()),
-        description: prefer_nonempty(facts.description.clone(), model.description).unwrap_or_default(),
-        github_url: prefer_nonempty(facts.github_url.clone(), evidence_url(&model.github_url, &facts.evidence).unwrap_or_default())
+        name: prefer_nonempty(facts.name.clone(), model.name)
+            .unwrap_or_else(|| facts.folder_name.clone()),
+        description: prefer_nonempty(facts.description.clone(), model.description)
             .unwrap_or_default(),
-        website_url: prefer_nonempty(facts.website_url.clone(), evidence_url(&model.website_url, &facts.evidence).unwrap_or_default())
-            .unwrap_or_default(),
+        github_url: prefer_nonempty(
+            facts.github_url.clone(),
+            evidence_url(&model.github_url, &facts.evidence).unwrap_or_default(),
+        )
+        .unwrap_or_default(),
+        website_url: prefer_nonempty(
+            facts.website_url.clone(),
+            evidence_url(&model.website_url, &facts.evidence).unwrap_or_default(),
+        )
+        .unwrap_or_default(),
         languages: model.languages,
         frameworks: model.frameworks,
     }
@@ -145,7 +153,10 @@ fn evidence_url(url: &str, evidence: &str) -> Option<String> {
 }
 
 fn prefer_nonempty(structured: Option<String>, model: String) -> Option<String> {
-    if let Some(value) = structured.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()) {
+    if let Some(value) = structured
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+    {
         return Some(value);
     }
     let model = model.trim();
@@ -177,7 +188,11 @@ fn merge_structured(parsed: &mut StructuredFields, filename: &str, body: &str) {
             if parsed.github_url.is_none() {
                 parsed.github_url = toml_table_url(body, "[project.urls]", "Repository")
                     .or_else(|| toml_table_url(body, "[project.urls]", "repository"))
-                    .and_then(|u| git::github_https_url(&u).or(Some(u)).filter(|u| u.contains("github.com")));
+                    .and_then(|u| {
+                        git::github_https_url(&u)
+                            .or(Some(u))
+                            .filter(|u| u.contains("github.com"))
+                    });
             }
         }
         "go.mod" => {
@@ -222,7 +237,8 @@ fn apply_toml_section(parsed: &mut StructuredFields, body: &str, section: &str) 
         parsed.website_url = toml_field(body, section, "homepage").filter(|u| looks_like_url(u));
     }
     if parsed.github_url.is_none() {
-        parsed.github_url = toml_field(body, section, "repository").and_then(|u| git::github_https_url(&u));
+        parsed.github_url =
+            toml_field(body, section, "repository").and_then(|u| git::github_https_url(&u));
     }
 }
 
@@ -242,7 +258,12 @@ fn apply_yaml_manifest(parsed: &mut StructuredFields, body: &str) {
 }
 
 fn json_string(value: &serde_json::Value, key: &str) -> Option<String> {
-    value.get(key)?.as_str().map(str::trim).filter(|s| !s.is_empty()).map(ToOwned::to_owned)
+    value
+        .get(key)?
+        .as_str()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(ToOwned::to_owned)
 }
 
 fn json_repo_url(value: &serde_json::Value) -> Option<String> {
@@ -384,7 +405,10 @@ mod tests {
         assert_eq!(facts.name.as_deref(), Some("demo-app"));
         assert_eq!(facts.description.as_deref(), Some("A demo"));
         assert_eq!(facts.website_url.as_deref(), Some("https://example.com"));
-        assert_eq!(facts.github_url.as_deref(), Some("https://github.com/org/demo"));
+        assert_eq!(
+            facts.github_url.as_deref(),
+            Some("https://github.com/org/demo")
+        );
         assert!(facts.evidence.contains("The best demo"));
         assert!(dir.exists());
         fs::remove_dir_all(&dir).unwrap();
@@ -420,7 +444,13 @@ mod tests {
     #[test]
     fn evidence_accepts_ssh_remote_shape() {
         let evidence = "Git remote origin: git@github.com:org/repo.git\n";
-        assert!(url_supported_by_evidence("https://github.com/org/repo", evidence));
-        assert!(!url_supported_by_evidence("https://invented.example", evidence));
+        assert!(url_supported_by_evidence(
+            "https://github.com/org/repo",
+            evidence
+        ));
+        assert!(!url_supported_by_evidence(
+            "https://invented.example",
+            evidence
+        ));
     }
 }

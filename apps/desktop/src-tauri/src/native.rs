@@ -30,7 +30,11 @@ pub fn list_dir_shallow(path: &Path) -> AppResult<Vec<FileEntryDto>> {
             },
         });
     }
-    entries.sort_by(|a, b| b.is_dir.cmp(&a.is_dir).then(a.name.to_lowercase().cmp(&b.name.to_lowercase())));
+    entries.sort_by(|a, b| {
+        b.is_dir
+            .cmp(&a.is_dir)
+            .then(a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
     Ok(entries)
 }
 
@@ -97,11 +101,7 @@ pub fn open_vscode(configured: &str, folder: &Path) -> AppResult<()> {
         ]
     };
     for bin in candidates {
-        if Command::new(&bin)
-            .arg(folder.as_os_str())
-            .spawn()
-            .is_ok()
-        {
+        if Command::new(&bin).arg(folder.as_os_str()).spawn().is_ok() {
             return Ok(());
         }
     }

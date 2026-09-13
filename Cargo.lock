@@ -488,7 +488,7 @@ dependencies = [
 
 [[package]]
 name = "bluephoenix"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -500,7 +500,6 @@ dependencies = [
  "dirs 6.0.0",
  "hex",
  "hostname",
- "keyring",
  "objc2-app-kit",
  "objc2-foundation",
  "open",
@@ -531,7 +530,7 @@ dependencies = [
 
 [[package]]
 name = "bluephoenix-ai"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "async-trait",
  "bluephoenix-domain",
@@ -550,7 +549,7 @@ dependencies = [
 
 [[package]]
 name = "bluephoenix-api"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "argon2",
  "axum",
@@ -574,7 +573,7 @@ dependencies = [
 
 [[package]]
 name = "bluephoenix-domain"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "chrono",
  "semver",
@@ -586,7 +585,7 @@ dependencies = [
 
 [[package]]
 name = "bluephoenix-sync-protocol"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "bluephoenix-domain",
  "chrono",
@@ -2762,16 +2761,6 @@ dependencies = [
  "bitflags 2.13.2",
  "serde",
  "unicode-segmentation",
-]
-
-[[package]]
-name = "keyring"
-version = "3.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eebcc3aff044e5944a8fbaf69eb277d11986064cba30c468730e8b9909fb551c"
-dependencies = [
- "log",
- "zeroize",
 ]
 
 [[package]]

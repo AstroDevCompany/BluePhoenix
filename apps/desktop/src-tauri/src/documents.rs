@@ -25,7 +25,15 @@ pub fn index_document(state: &AppState, payload: &str) -> AppResult<()> {
         })?;
         return Ok(());
     };
-    set_stage(state, file_id, &project_id, "processing", "Reading", None, None)?;
+    set_stage(
+        state,
+        file_id,
+        &project_id,
+        "processing",
+        "Reading",
+        None,
+        None,
+    )?;
     let bytes = match std::fs::read(&path) {
         Ok(b) => b,
         Err(_) => {
@@ -41,7 +49,15 @@ pub fn index_document(state: &AppState, payload: &str) -> AppResult<()> {
             return Ok(());
         }
     };
-    set_stage(state, file_id, &project_id, "processing", "Extracting", None, None)?;
+    set_stage(
+        state,
+        file_id,
+        &project_id,
+        "processing",
+        "Extracting",
+        None,
+        None,
+    )?;
     let parsed = parse_document(Path::new(&path), &bytes);
     set_stage(
         state,
@@ -54,10 +70,8 @@ pub fn index_document(state: &AppState, payload: &str) -> AppResult<()> {
     )?;
     let raw_chunks = semantic_chunks(&parsed, 900, 200);
     let truncated = raw_chunks.len() == 200 && parsed.text.len() > 900 * 200;
-    let chunks: Vec<(Option<String>, String, Option<i64>)> = raw_chunks
-        .into_iter()
-        .map(|(h, t)| (h, t, None))
-        .collect();
+    let chunks: Vec<(Option<String>, String, Option<i64>)> =
+        raw_chunks.into_iter().map(|(h, t)| (h, t, None)).collect();
     set_stage(
         state,
         file_id,
@@ -88,7 +102,11 @@ pub fn index_document(state: &AppState, payload: &str) -> AppResult<()> {
     } else {
         "completed"
     };
-    let stage = if status == "failed" { "Extracting" } else { "Ready" };
+    let stage = if status == "failed" {
+        "Extracting"
+    } else {
+        "Ready"
+    };
     set_stage(
         state,
         file_id,
@@ -110,9 +128,9 @@ fn set_stage(
     limitation: Option<&str>,
     parser: Option<&str>,
 ) -> AppResult<()> {
-    state
-        .db
-        .with(|c| ai_store::upsert_document_record(c, file_id, project_id, status, stage, limitation, parser))?;
+    state.db.with(|c| {
+        ai_store::upsert_document_record(c, file_id, project_id, status, stage, limitation, parser)
+    })?;
     Ok(())
 }
 

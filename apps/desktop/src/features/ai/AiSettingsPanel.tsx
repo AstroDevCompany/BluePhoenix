@@ -63,7 +63,15 @@ export function AiSettingsPanel() {
             <input className="input" readOnly value={revealed ?? status.maskedKey ?? "••••"} />
             <button className="btn" type="button" onClick={async () => {
               if (revealed) { setRevealed(null); return; }
-              try { setRevealed(await api.aiRevealKey()); } catch (e) { toast(formatError(e), "error"); }
+              try {
+                const res = await api.aiRevealKey();
+                const value = typeof res === "string" ? res : res.key;
+                if (!value || value.includes(" ") || value.includes("Settings")) {
+                  toast(value || "No API key is stored", "error");
+                  return;
+                }
+                setRevealed(value);
+              } catch (e) { toast(formatError(e), "error"); }
             }}>{revealed ? "Hide" : "Reveal"}</button>
             <button className="btn danger" type="button" onClick={async () => {
               setStatus(await api.aiClearKey());
@@ -76,8 +84,13 @@ export function AiSettingsPanel() {
             <input className="input" type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="sk-or-…" />
             <button className="btn primary" type="button" onClick={async () => {
               try {
-                setStatus(await api.aiSetKey(key));
+                const next = await api.aiSetKey(key);
+                setStatus(next);
                 setKey("");
+                if (!next.hasKey) {
+                  toast("The key could not be stored in the OS keychain", "error");
+                  return;
+                }
                 toast("Key saved to the OS keychain");
               } catch (e) { toast(formatError(e), "error"); }
             }}>Save key</button>
@@ -89,9 +102,14 @@ export function AiSettingsPanel() {
           <input className="input" type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="Replace key" />
           <button className="btn" type="button" onClick={async () => {
             try {
-              setStatus(await api.aiSetKey(key));
+              const next = await api.aiSetKey(key);
+              setStatus(next);
               setKey("");
               setRevealed(null);
+              if (!next.hasKey) {
+                toast("The key could not be stored in the OS keychain", "error");
+                return;
+              }
               toast("Key replaced");
             } catch (e) { toast(formatError(e), "error"); }
           }}>Replace</button>
