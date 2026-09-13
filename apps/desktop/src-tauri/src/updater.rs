@@ -1,8 +1,8 @@
 use crate::models::UpdateCheckDto;
-use bluephoenix_domain::semver_check::{is_newer, parse_version_json};
+use bluephoenix_domain::semver_check::{is_newer, parse_remote_version};
 
 pub const VERSION_CHECK_URL: &str =
-    "https://raw.githubusercontent.com/bluephoenix-app/bluephoenix/main/version.json";
+    "https://raw.githubusercontent.com/AstroDevCompany/mint-update-links/refs/heads/main/bluephoenix.v";
 
 pub async fn check_raw(url: &str, local: &str) -> UpdateCheckDto {
     if url.trim().is_empty() {
@@ -46,7 +46,7 @@ pub async fn check_raw(url: &str, local: &str) -> UpdateCheckDto {
                 };
             }
             match response.text().await {
-                Ok(body) => match parse_version_json(&body) {
+                Ok(body) => match parse_remote_version(&body) {
                     Ok(remote) => {
                         let newer = is_newer(&remote, local).unwrap_or(false);
                         UpdateCheckDto {

@@ -30,6 +30,16 @@ pub fn parse_version_json(body: &str) -> DomainResult<String> {
     Ok(parsed.to_string())
 }
 
+/// Accepts a plain semver file (`1.0.0` or `"1.0.0"`) or `{ "version": "1.0.0" }`.
+pub fn parse_remote_version(body: &str) -> DomainResult<String> {
+    let trimmed = body.trim();
+    if trimmed.starts_with('{') {
+        return parse_version_json(trimmed);
+    }
+    let unquoted = trimmed.trim_matches(|c| c == '"' || c == '\'');
+    Ok(parse_version(unquoted)?.to_string())
+}
+
 pub fn is_at_least_one(version: &str) -> DomainResult<bool> {
     Ok(parse_version(version)? >= parse_version("1.0.0")?)
 }
@@ -51,5 +61,9 @@ mod tests {
         assert!(parse_version_json("not-json").is_err());
         assert!(parse_version_json("{\"version\":\"nope\"}").is_err());
         assert_eq!(parse_version_json("{\"version\":\"1.4.0\"}").unwrap(), "1.4.0");
+        assert_eq!(parse_remote_version("1.0.0\n").unwrap(), "1.0.0");
+        assert_eq!(parse_remote_version("\"1.2.3\"").unwrap(), "1.2.3");
+        assert_eq!(parse_remote_version("{\"version\":\"2.0.0\"}").unwrap(), "2.0.0");
+        assert!(parse_remote_version("latest").is_err());
     }
 }

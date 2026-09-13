@@ -1,7 +1,7 @@
 {
   "name": "bluephoenix",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "BluePhoenix personal command center",
   "scripts": {
     "dev": "pnpm --filter desktop tauri dev",
@@ -17,6 +17,8 @@
     "node": ">=20"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   }
 }
