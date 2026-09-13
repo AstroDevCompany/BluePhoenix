@@ -5,6 +5,7 @@ import type { Settings } from "../lib/types";
 import { api, formatError } from "../lib/ipc";
 import { useUi } from "../stores/ui";
 import type { Bootstrap } from "../lib/types";
+import { applyAccent } from "../lib/theme";
 
 const TABS = ["appearance", "workspace", "updates", "developer", "account", "data", "ai"] as const;
 
@@ -30,6 +31,7 @@ export function SettingsPage({
       setSettings(saved);
       toast("Settings saved");
       document.documentElement.dataset.reducedMotion = next.reducedMotion ? "true" : "false";
+      applyAccent(next.accent);
       onReload();
     } catch (e) {
       toast(formatError(e), "error");
@@ -39,9 +41,15 @@ export function SettingsPage({
   return (
     <div>
       <h1 className="h1">Settings</h1>
-      <div className="row" style={{ margin: "20px 0 28px" }}>
+      <div className="settings-tabs" role="tablist" aria-label="Settings">
         {TABS.map((t) => (
-          <button key={t} className={`btn ${current === t ? "primary" : ""}`} type="button" onClick={() => onTab(t)}>
+          <button
+            key={t}
+            type="button"
+            role="tab"
+            aria-selected={current === t}
+            onClick={() => onTab(t)}
+          >
             {t === "ai" ? "AI" : t[0].toUpperCase() + t.slice(1)}
           </button>
         ))}
@@ -49,9 +57,6 @@ export function SettingsPage({
       <div key={current}>
       {current === "appearance" ? (
         <section className="glass-panel settings-card">
-          <label className="field"><span className="label">Theme</span>
-            <Select value={settings.theme} onChange={(theme) => void save({ ...settings, theme })} options={[{ value: "dark", label: "Dark" }]} />
-          </label>
           <label className="field"><span className="label">Accent</span>
             <Select value={settings.accent} onChange={(accent) => void save({ ...settings, accent })} options={[{ value: "cyan", label: "Cyan" }, { value: "teal", label: "Teal" }]} />
           </label>

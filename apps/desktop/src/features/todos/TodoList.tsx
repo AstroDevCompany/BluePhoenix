@@ -19,13 +19,13 @@ export function TodoList({
     <div>
       {todos.length === 0 ? <EmptyState title="No TODOs" body="Add a task for this item." /> : null}
       {todos.slice(0, 40).map((t) => (
-        <label key={t.id} className="list-row">
+        <label key={t.id} className={`list-row ${t.status === "completed" ? "is-done" : ""}`}>
           <input
             type="checkbox"
             checked={t.status === "completed"}
             onChange={() => void api.setTodoStatus(t.id, t.status === "completed" ? "open" : "completed").then(onChange)}
           />
-          {t.title}
+          <span className="list-row-title">{t.title}</span>
         </label>
       ))}
       <div className="row">

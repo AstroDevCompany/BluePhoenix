@@ -12,7 +12,7 @@ export function EmptyState({
       <h2 className="h2">{title}</h2>
       <p className="muted">{body}</p>
       {action ? (
-        <button className="btn primary" type="button" onClick={action.onClick} style={{ marginTop: 12 }}>
+        <button className="btn primary" type="button" onClick={action.onClick}>
           {action.label}
         </button>
       ) : null}

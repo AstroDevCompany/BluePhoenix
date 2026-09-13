@@ -7,13 +7,13 @@ type UiState = {
   createOpen: boolean;
   aiPanelOpen: boolean;
   toast: Toast | null;
-  confirm: { title: string; body: string; onConfirm: () => void } | null;
+  confirm: { title: string; body: string; onConfirm: () => void; danger?: boolean } | null;
   setPalette: (open: boolean) => void;
   setAiPanel: (open: boolean) => void;
   openCreate: () => void;
   closeCreate: () => void;
   showToast: (message: string, tone?: "ok" | "error") => void;
-  askConfirm: (title: string, body: string, onConfirm: () => void) => void;
+  askConfirm: (title: string, body: string, onConfirm: () => void, danger?: boolean) => void;
   closeConfirm: () => void;
 };
 
@@ -36,6 +36,6 @@ export const useUi = create<UiState>((set) => ({
       set((s) => (s.toast?.id === id ? { toast: null } : s));
     }, 4200);
   },
-  askConfirm: (title, body, onConfirm) => set({ confirm: { title, body, onConfirm } }),
+  askConfirm: (title, body, onConfirm, danger = false) => set({ confirm: { title, body, onConfirm, danger } }),
   closeConfirm: () => set({ confirm: null }),
 }));

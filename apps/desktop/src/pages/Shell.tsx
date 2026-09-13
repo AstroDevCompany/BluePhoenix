@@ -1,4 +1,4 @@
-import { createContext, useContext } from "react";
+import { createContext, useContext, useEffect } from "react";
 import { Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   Award,
@@ -22,6 +22,7 @@ import { CreateProjectDialog } from "../features/projects/CreateProjectDialog";
 import { TabCreateDialog } from "../components/TabCreateDialog";
 import { AiChatPanel } from "../features/ai/AiChatPanel";
 import { AiSetupPopup } from "../features/ai/AiSetupPopup";
+import { applyWorkspaceColor } from "../lib/theme";
 
 export type ShellApi = {
   bootstrap: Bootstrap;
@@ -59,6 +60,19 @@ export function RootChrome() {
   const route = parsePath(pathname, fallback);
   const currentCategory: Category | undefined =
     route.name === "workspace" ? enabled.find((c) => c.id === route.categoryId) ?? enabled[0] : enabled[0];
+
+  useEffect(() => {
+    applyWorkspaceColor(currentCategory?.accent);
+  }, [currentCategory?.accent]);
+
+  useEffect(() => {
+    if (!confirm) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeConfirm();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [confirm, closeConfirm]);
 
   const go = (next: Route) => {
     void navigate({ to: pathFor(next) as never });
@@ -98,9 +112,7 @@ export function RootChrome() {
           onSelect={(id) => go({ name: "workspace", categoryId: id, page: "overview" })}
         />
         <div className="sidebar-nav">
-          <div className="muted" style={{ fontSize: 11, letterSpacing: "0.12em", marginTop: 12 }}>
-            {currentCategory.name.toUpperCase()}
-          </div>
+          <div className="nav-section">{currentCategory.name.toUpperCase()}</div>
           {currentCategory.nav.filter((item) => item.id !== "activity").map((item) => {
             const page = (item.id === "overview" ? "overview" : item.id === "items" ? "items" : item.id) as WorkspacePage;
             const active = route.name === "workspace" && (route.page === page || (item.id === "items" && route.page === "items"));
@@ -154,7 +166,7 @@ export function RootChrome() {
         />
       ) : null}
       <CommandPalette bootstrap={bootstrap} onNavigate={go} />
-      {toast ? <div className="toast" role="status">{toast.message}</div> : null}
+      {toast ? <div className={`toast ${toast.tone === "error" ? "error" : ""}`} role="status">{toast.message}</div> : null}
       {confirm ? (
         <div className="overlay" onClick={closeConfirm}>
           <div className="dialog" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
@@ -162,7 +174,7 @@ export function RootChrome() {
             <p className="muted">{confirm.body}</p>
             <div className="row" style={{ justifyContent: "flex-end" }}>
               <button className="btn" type="button" onClick={closeConfirm}>Cancel</button>
-              <button className="btn danger" type="button" onClick={() => { confirm.onConfirm(); closeConfirm(); }}>Confirm</button>
+              <button className={`btn ${confirm.danger ? "danger" : "primary"}`} type="button" onClick={() => { confirm.onConfirm(); closeConfirm(); }}>Confirm</button>
             </div>
           </div>
         </div>

@@ -4,6 +4,8 @@ import type { Bootstrap, Category } from "../lib/types";
 import { api, formatError } from "../lib/ipc";
 import { useUi } from "../stores/ui";
 
+const STEPS = ["Account", "Workspace", "Default", "First item"];
+
 export function Onboarding({
   bootstrap,
   onDone,
@@ -28,16 +30,22 @@ export function Onboarding({
   };
 
   return (
-    <div className="main" style={{ maxWidth: 640, margin: "0 auto" }}>
+    <div className="onboard-flow">
       <h1 className="h1">Welcome to BluePhoenix</h1>
       <p className="muted">A short setup. You can change everything later.</p>
+      <div className="onboard-steps" aria-label={`Step ${step + 1} of ${STEPS.length}`}>
+        {STEPS.map((label, i) => (
+          <span key={label} className={i < step ? "is-done" : i === step ? "is-current" : ""} title={label} />
+        ))}
+      </div>
+      <p className="faint">{STEPS[step]} · {step + 1}/{STEPS.length}</p>
       {step === 0 ? (
-        <div className="glass-panel settings-card" style={{ marginTop: 28 }}>
+        <div className="glass-panel settings-card" style={{ marginTop: 20 }}>
           <h2 className="h2">Account</h2>
           <p className="muted">Create an account to sync later, or continue locally.</p>
           <label className="field"><span className="label">Email</span><input className="input" value={email} onChange={(e) => setEmail(e.target.value)} /></label>
           <label className="field"><span className="label">Password</span><input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
-          <div className="row">
+          <div className="row" style={{ justifyContent: "flex-end" }}>
             <button className="btn" type="button" onClick={async () => {
               try {
                 await api.authRegister(email, password);
@@ -61,7 +69,7 @@ export function Onboarding({
         </div>
       ) : null}
       {step === 1 ? (
-        <div className="glass-panel settings-card" style={{ marginTop: 28 }}>
+        <div className="glass-panel settings-card" style={{ marginTop: 20 }}>
           <h2 className="h2">Workspace</h2>
           <div className="choice-list">
           {bootstrap.categories.map((c: Category) => (
@@ -77,7 +85,7 @@ export function Onboarding({
         </div>
       ) : null}
       {step === 2 ? (
-        <div className="glass-panel settings-card" style={{ marginTop: 28 }}>
+        <div className="glass-panel settings-card" style={{ marginTop: 20 }}>
           <h2 className="h2">Default workspace</h2>
           <Select
             value={workspace}
@@ -121,7 +129,7 @@ function FirstItem({
   const [name, setName] = useState("");
   const toast = useUi((s) => s.showToast);
   return (
-    <div className="glass-panel settings-card" style={{ marginTop: 28 }}>
+    <div className="glass-panel settings-card" style={{ marginTop: 20 }}>
       <h2 className="h2">First {categoryName.toLowerCase()}</h2>
       <p className="muted">Optional. You can skip and create it later from the home screen.</p>
       <label className="field"><span className="label">Name</span>

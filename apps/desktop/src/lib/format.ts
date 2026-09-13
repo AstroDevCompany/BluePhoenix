@@ -34,3 +34,19 @@ export const EXAM_STATUS_OPTIONS = Object.entries(EXAM_STATUS_LABELS).map(([valu
 export function formatExamStatus(status: string) {
   return EXAM_STATUS_LABELS[status] ?? status.replaceAll("_", " ").replace(/^\w/, (c) => c.toUpperCase());
 }
+
+const ACTIVITY_LABELS: Record<string, string> = {
+  "todo.created": "TODO created",
+  "todo.completed": "TODO completed",
+  "version.released": "Version released",
+  "topic.completed": "Topic completed",
+  "lesson.attended": "Lesson attended",
+  "exam.passed": "Exam passed",
+  "exam.failed": "Exam failed",
+  "exam.attempted": "Exam recorded",
+};
+
+export function formatActivityEvent(eventType: string) {
+  if (ACTIVITY_LABELS[eventType]) return ACTIVITY_LABELS[eventType];
+  return eventType.replaceAll(".", " · ").replaceAll("_", " ").replace(/^\w/, (c) => c.toUpperCase());
+}

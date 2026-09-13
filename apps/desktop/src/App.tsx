@@ -6,6 +6,7 @@ import { ShellProvider } from "./pages/Shell";
 import { parsePath, pathFor } from "./components/router";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { useUi } from "./stores/ui";
+import { applyAccent } from "./lib/theme";
 
 function hideHtmlSplash() {
   document.getElementById("boot-splash")?.setAttribute("hidden", "");
@@ -38,6 +39,7 @@ export default function App() {
       }
       document.documentElement.dataset.reducedMotion = b.settings.reducedMotion ? "true" : "false";
       document.documentElement.dataset.os = navigator.userAgent.includes("Mac") ? "macos" : "windows";
+      applyAccent(b.settings.accent);
     }).catch((e) => setError(formatError(e)));
   }, []);
 

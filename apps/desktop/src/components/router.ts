@@ -33,6 +33,7 @@ export type FabIntent = "project" | "todo" | "exam" | "command";
 
 export function fabIntentFor(route: Route): FabIntent | null {
   if (route.name !== "workspace") return null;
+  if (route.projectId) return null;
   if (route.page === "todos") return "todo";
   if (route.page === "exams") return "exam";
   if (route.page === "commands") return "command";

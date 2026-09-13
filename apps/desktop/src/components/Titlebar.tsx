@@ -20,7 +20,7 @@ export function Titlebar({ extra }: { extra?: ReactNode }) {
       {os === "macos" ? <div className="titlebar-lights" aria-hidden /> : null}
       <div className="titlebar-drag" data-tauri-drag-region>
         <img src={logo} alt="" className="titlebar-logo" />
-        BluePhoenix
+        <span className="titlebar-wordmark">BluePhoenix</span>
         {extra}
       </div>
       <Tooltip content={aiOpen ? "Hide AI chat" : "Show AI chat"} placement="bottom">

@@ -8,8 +8,9 @@ import { CommandsPage } from "../features/software/CommandsPage";
 import { ExamsPage } from "../features/university/ExamsPage";
 import { KindDashboard } from "../features/workspaces/registry";
 import { EmptyState } from "../components/ui/EmptyState";
+import { PageHeader } from "../components/PageHeader";
 import type { WorkspacePage } from "../components/router";
-import { formatDate } from "../lib/format";
+import { formatActivityEvent, formatDate } from "../lib/format";
 import { useUi } from "../stores/ui";
 
 export function WorkspaceHome({
@@ -50,25 +51,24 @@ function Overview({
   const [projects, setProjects] = useState<ProjectCard[]>([]);
   const [dash, setDash] = useState<GpaDashboard | null>(null);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
+  const [ready, setReady] = useState(false);
   useEffect(() => {
-    void api.listProjects(category.id).then(setProjects);
-    void api.listActivity({ categoryId: category.id }).then((rows) => setActivity(rows as ActivityEvent[]));
-    if (category.kind === "university") void api.universityDashboard().then(setDash);
+    setReady(false);
+    void Promise.all([
+      api.listProjects(category.id).then(setProjects),
+      api.listActivity({ categoryId: category.id }).then((rows) => setActivity(rows as ActivityEvent[])),
+      category.kind === "university" ? api.universityDashboard().then(setDash) : Promise.resolve(),
+    ]).finally(() => setReady(true));
   }, [category.id, category.kind, refreshKey]);
 
   return (
     <div>
-      <div className="row" style={{ justifyContent: "space-between" }}>
-        <div>
-          <h1 className="h1">{category.name}</h1>
-          <p className="muted">{category.terminology.itemPlural}</p>
-        </div>
-        <button className="btn primary" type="button" onClick={onCreate}>New {category.terminology.itemSingular}</button>
-      </div>
-      <KindDashboard category={category} projects={projects} gpa={dash} />
+      <PageHeader title={category.name} kicker={category.terminology.itemPlural} />
+      {!ready ? <p className="muted">Loading…</p> : null}
+      {ready ? <KindDashboard category={category} projects={projects} gpa={dash} /> : null}
       <div className="section">
         <h2 className="h2">{category.terminology.itemPlural}</h2>
-        {projects.length === 0 ? (
+        {!ready ? null : projects.length === 0 ? (
           <EmptyState
             title={`No ${category.terminology.itemPlural.toLowerCase()} yet`}
             body={`Create your first ${category.terminology.itemSingular.toLowerCase()}. Cards, dashboards, and tools stay specific to this workspace.`}
@@ -84,10 +84,16 @@ function Overview({
       </div>
       <div className="section">
         <h2 className="h2">Recent activity</h2>
-        {activity.length === 0 ? <p className="muted">Nothing recorded yet.</p> : null}
-        {activity.slice(0, 8).map((a) => (
-          <div key={a.id} className="list-row muted">{a.projectName ? `${a.projectName} · ` : ""}{a.eventType} · {formatDate(a.createdAt)}</div>
-        ))}
+        {!ready ? null : activity.length === 0 ? (
+          <EmptyState title="Nothing recorded yet" body="Actions you take in this workspace will show up here." />
+        ) : (
+          activity.slice(0, 8).map((a) => (
+            <div key={a.id} className="list-row">
+              <span className="list-row-title">{formatActivityEvent(a.eventType)}</span>
+              <span className="list-row-meta">{a.projectName ? `${a.projectName} · ` : ""}{formatDate(a.createdAt)}</span>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
@@ -105,17 +111,18 @@ function ItemsPage({
   refreshKey: number;
 }) {
   const [projects, setProjects] = useState<ProjectCard[]>([]);
-  useEffect(() => { void api.listProjects(category.id).then(setProjects); }, [category.id, refreshKey]);
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    setReady(false);
+    void api.listProjects(category.id).then(setProjects).finally(() => setReady(true));
+  }, [category.id, refreshKey]);
   return (
     <div>
-      <div className="row" style={{ justifyContent: "space-between" }}>
-        <h1 className="h1">{category.terminology.itemPlural}</h1>
-        <button className="btn primary" type="button" onClick={onCreate}>New</button>
-      </div>
-      {projects.length === 0 ? (
-        <EmptyState title="Nothing here yet" body={`This list is only ${category.terminology.itemPlural.toLowerCase()} in ${category.name}.`} action={{ label: "Create", onClick: onCreate }} />
+      <PageHeader title={category.terminology.itemPlural} kicker={category.name} />
+      {!ready ? <p className="muted">Loading…</p> : projects.length === 0 ? (
+        <EmptyState title="Nothing here yet" body={`This list is only ${category.terminology.itemPlural.toLowerCase()} in ${category.name}.`} action={{ label: `New ${category.terminology.itemSingular}`, onClick: onCreate }} />
       ) : (
-        <div className="grid-cards" style={{ marginTop: 20 }}>
+        <div className="grid-cards">
           {projects.map((p) => (
             <ProjectCardView key={p.id} project={p} category={category} onOpen={() => onOpen(p.id)} onRefresh={() => void api.listProjects(category.id).then(setProjects)} />
           ))}

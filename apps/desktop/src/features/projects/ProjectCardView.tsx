@@ -95,7 +95,7 @@ function SoftwareBody({
             const exec = (confirmed?: boolean) =>
               run(() => api.runCommand({ projectId: project.id, command: pinned.command, workingDirectory: project.localPath, confirmed }), `Ran ${pinned.name}`);
             if (pinned.dangerous) {
-              confirm("Run dangerous command?", pinned.command, () => void exec(true));
+              confirm("Run dangerous command?", pinned.command, () => void exec(true), true);
             } else void exec();
           }}>
             <Play size={14} /> {pinned.name}

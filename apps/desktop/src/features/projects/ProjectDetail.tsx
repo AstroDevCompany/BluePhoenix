@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode, Children } from "react";
+import { ChevronDown } from "lucide-react";
 import type { Category, CommandOutput, ProjectCard, Todo } from "../../lib/types";
 import { hasCap } from "../../lib/types";
 import { api, formatError } from "../../lib/ipc";
@@ -11,6 +12,32 @@ import { TodoList } from "../todos/TodoList";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { Select } from "../../components/ui/Select";
 import { SoftwareAiActions } from "../ai/SoftwareAiActions";
+
+type DetailTab = "overview" | "todos" | "dev" | "files" | "study" | "exams" | "docs";
+
+function tabsFor(category: Category): { id: DetailTab; label: string }[] {
+  if (category.kind === "university") {
+    return [
+      { id: "overview", label: "Overview" },
+      { id: "study", label: "Study" },
+      ...(hasCap(category, "exams") ? [{ id: "exams" as const, label: "Exams" }] : []),
+      ...(hasCap(category, "files") ? [{ id: "docs" as const, label: "Documents" }] : []),
+    ];
+  }
+  if (category.kind === "software") {
+    return [
+      { id: "overview", label: "Overview" },
+      ...(hasCap(category, "todos") ? [{ id: "todos" as const, label: "TODOs" }] : []),
+      { id: "dev", label: "Dev" },
+      ...(hasCap(category, "files") ? [{ id: "files" as const, label: "Files" }] : []),
+    ];
+  }
+  return [
+    { id: "overview", label: "Overview" },
+    ...(hasCap(category, "todos") ? [{ id: "todos" as const, label: "TODOs" }] : []),
+    ...(hasCap(category, "files") ? [{ id: "files" as const, label: "Files" }] : []),
+  ];
+}
 
 export function ProjectDetail({ category, projectId }: { category: Category; projectId: string }) {
   const [project, setProject] = useState<ProjectCard | null>(null);
@@ -26,6 +53,8 @@ export function ProjectDetail({ category, projectId }: { category: Category; pro
   const [output, setOutput] = useState<CommandOutput | null>(null);
   const [topicId, setTopicId] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  const tabs = tabsFor(category);
+  const [tab, setTab] = useState<DetailTab>(tabs[0]?.id ?? "overview");
   const toast = useUi((s) => s.showToast);
   const confirm = useUi((s) => s.askConfirm);
 
@@ -47,6 +76,7 @@ export function ProjectDetail({ category, projectId }: { category: Category; pro
 
   useEffect(() => {
     reload();
+    setTab(tabsFor(category)[0]?.id ?? "overview");
   }, [projectId, category.id]);
 
   useEffect(() => {
@@ -59,169 +89,268 @@ export function ProjectDetail({ category, projectId }: { category: Category; pro
   }, [files, projectId]);
 
   if (error) return <EmptyState title="Could not open this item" body={error} />;
-  if (!project) return <div className="muted">Loading…</div>;
+  if (!project) return <p className="muted">Loading…</p>;
+
+  const moreOpen = (
+    <>
+      {hasCap(category, "vscode") && project.localPath ? <button className="btn" type="button" onClick={() => void api.openVscode(project.localPath!)}>VS Code</button> : null}
+      {hasCap(category, "terminal") && project.localPath ? <button className="btn" type="button" onClick={() => void api.openTerminal(project.localPath!)}>Terminal</button> : null}
+      {hasCap(category, "github") && project.githubUrl ? <button className="btn" type="button" onClick={() => void api.openUrl(project.githubUrl!)}>GitHub</button> : null}
+      {project.websiteUrl ? <button className="btn" type="button" onClick={() => void api.openUrl(project.websiteUrl!)}>Website</button> : null}
+      {hasCap(category, "git") ? (
+        <>
+          <button className="btn" type="button" onClick={() => api.gitRun(project.id, "fetch").then(() => toast("Fetched")).catch((e) => toast(formatError(e), "error"))}>Fetch</button>
+          <button className="btn" type="button" onClick={() => api.gitRun(project.id, "pull").then(() => toast("Pulled")).catch((e) => toast(formatError(e), "error"))}>Pull</button>
+          <button className="btn" type="button" onClick={() => api.gitRun(project.id, "push").then(() => toast("Pushed")).catch((e) => toast(formatError(e), "error"))}>Push</button>
+        </>
+      ) : null}
+    </>
+  );
+
+  const filesPanel = (
+    <div className="section">
+      <h2 className="h2">{category.kind === "university" ? "Documents" : "Files"}</h2>
+      <p className="muted">Folder listings are cached. Refresh runs a shallow scan; deep indexing is a background job.</p>
+      <div className="row">
+        <button className="btn" type="button" onClick={() => api.scanProjectFolder(projectId).then((r) => setFolder(r as never))}>Refresh folder</button>
+        <button className="btn" type="button" onClick={async () => {
+          const path = await api.pickFile();
+          if (!path) return;
+          const name = path.split(/[\\/]/).pop() ?? path;
+          await api.addProjectFile({ projectId, displayName: name, absolutePath: path });
+          reload();
+        }}>Add file</button>
+      </div>
+      {files.length === 0 && folder.length === 0 ? <EmptyState title="No files yet" body="Attach a file or refresh the project folder." /> : null}
+      {files.map((f) => (
+        <div key={f.id} className="list-row">
+          <span className="list-row-title">{f.displayName}{f.indexStage ? ` · ${f.indexStage}` : ""}{f.indexStatus && f.indexStatus !== "completed" ? ` (${f.indexStatus})` : ""}</span>
+          {f.indexLimitation ? <span className="list-row-meta">{f.indexLimitation}</span> : null}
+          {f.absolutePath ? <button className="btn" type="button" onClick={() => void api.openPath(f.absolutePath!)}>Open</button> : null}
+          {f.absolutePath ? <button className="btn" type="button" onClick={() => void api.revealPath(f.absolutePath!)}>Reveal</button> : null}
+        </div>
+      ))}
+      {folder.map((f) => (
+        <div key={f.path} className="list-row">
+          <span className="list-row-title">{f.name}</span>
+          <span className="list-row-meta">{f.isDir ? "Folder" : "File"}</span>
+          <button className="btn" type="button" onClick={() => void api.openPath(f.path)}>Open</button>
+        </div>
+      ))}
+    </div>
+  );
 
   return (
-    <div>
-      <h1 className="h1">{project.name}</h1>
-      <p className="muted">{project.description}</p>
-      <div className="row" style={{ margin: "12px 0 8px" }}>
-        <span className="badge">{project.status}</span>
-        <span className="badge">{category.name}</span>
-        {project.tags.map((t) => <span className="tag" key={t.id}>{t.name}</span>)}
-      </div>
-      {hasCap(category, "topics") && topics.length > 0 ? (
-        <label className="field">
-          <span className="label">Study topic</span>
-          <Select
-            value={topicId}
-            onChange={setTopicId}
-            options={[{ value: "", label: "Whole course" }, ...topics.map((t) => ({ value: t.id, label: t.title }))]}
-          />
-        </label>
-      ) : null}
-      <div className="row">
-        <TimerControls projectId={project.id} label={category.terminology.timerStart} topicId={topicId || undefined} onDone={reload} />
-        {hasCap(category, "vscode") && project.localPath ? <button className="btn" type="button" onClick={() => void api.openVscode(project.localPath!)}>VS Code</button> : null}
-        {hasCap(category, "terminal") && project.localPath ? <button className="btn" type="button" onClick={() => void api.openTerminal(project.localPath!)}>Terminal</button> : null}
-        {project.localPath ? <button className="btn" type="button" onClick={() => void api.openPath(project.localPath!)}>Folder</button> : null}
-        {hasCap(category, "github") && project.githubUrl ? <button className="btn" type="button" onClick={() => void api.openUrl(project.githubUrl!)}>GitHub</button> : null}
-        {project.websiteUrl ? <button className="btn" type="button" onClick={() => void api.openUrl(project.websiteUrl!)}>Website</button> : null}
-        {hasCap(category, "git") ? (
-          <>
-            <button className="btn" type="button" onClick={() => api.gitRun(project.id, "fetch").then(() => toast("Fetched")).catch((e) => toast(formatError(e), "error"))}>Fetch</button>
-            <button className="btn" type="button" onClick={() => api.gitRun(project.id, "pull").then(() => toast("Pulled")).catch((e) => toast(formatError(e), "error"))}>Pull</button>
-            <button className="btn" type="button" onClick={() => api.gitRun(project.id, "push").then(() => toast("Pushed")).catch((e) => toast(formatError(e), "error"))}>Push</button>
-          </>
-        ) : null}
-        {project.primaryFilePath ? <button className="btn primary" type="button" onClick={() => void api.openPath(project.primaryFilePath!)}>Open primary file</button> : null}
-      </div>
-      <div className="section">
-        <h2 className="h2">Overview</h2>
-        <div className="stat-grid">
-          <div className="stat">{category.terminology.timeLabel}<b>{formatDuration(project.totalTrackedSeconds)}</b></div>
-          <div className="stat">XP<b>{project.xp}</b></div>
-          <div className="stat">Level<b>{project.level}</b></div>
-          {hasCap(category, "versions") ? <div className="stat">Version<b>{project.currentVersion ?? "—"}</b></div> : null}
-          {hasCap(category, "grades") ? <div className="stat">Final grade<b>{project.finalGrade ?? "—"}</b></div> : null}
-          {hasCap(category, "attendance") && project.attendance ? <div className="stat">Attendance<b>{project.attendance.percent.toFixed(1)}%</b></div> : null}
+    <div className="detail-page">
+      <header className="detail-head">
+        <h1 className="h1">{project.name}</h1>
+        {project.description ? <p className="muted">{project.description}</p> : null}
+        <div className="row" style={{ marginTop: 8 }}>
+          <span className="badge">{project.status}</span>
+          <span className="badge">{category.name}</span>
+          {project.tags.map((t) => <span className="tag" key={t.id}>{t.name}</span>)}
         </div>
-        {project.git?.isRepo ? <p className="muted">Git: {project.git.branch} {project.git.dirty ? "(dirty)" : ""} {project.git.ahead ? `↑${project.git.ahead}` : ""} {project.git.behind ? `↓${project.git.behind}` : ""} {project.git.lastCommit}</p> : null}
-        {project.git?.error && !project.git.isRepo ? <p className="muted">{project.git.error}</p> : null}
+        {hasCap(category, "topics") && topics.length > 0 ? (
+          <label className="field" style={{ marginTop: 12, marginBottom: 0, maxWidth: 280 }}>
+            <span className="label">Study topic</span>
+            <Select
+              value={topicId}
+              onChange={setTopicId}
+              options={[{ value: "", label: "Whole course" }, ...topics.map((t) => ({ value: t.id, label: t.title }))]}
+            />
+          </label>
+        ) : null}
+        <div className="row detail-actions">
+          <TimerControls projectId={project.id} label={category.terminology.timerStart} topicId={topicId || undefined} onDone={reload} />
+          {project.localPath ? <button className="btn" type="button" onClick={() => void api.openPath(project.localPath!)}>Folder</button> : null}
+          {project.primaryFilePath ? <button className="btn primary" type="button" onClick={() => void api.openPath(project.primaryFilePath!)}>Open primary file</button> : null}
+          <MoreMenu>{moreOpen}</MoreMenu>
+        </div>
+      </header>
+
+      <div className="detail-tabs" role="tablist" aria-label="Item sections">
+        {tabs.map((item) => (
+          <button key={item.id} type="button" role="tab" aria-selected={tab === item.id} onClick={() => setTab(item.id)}>
+            {item.label}
+          </button>
+        ))}
       </div>
-      {hasCap(category, "timeTracking") ? <TimeEntries projectId={project.id} onChanged={reload} /> : null}
-      {hasCap(category, "todos") ? (
-        <div className="section">
+
+      {tab === "overview" ? (
+        <>
+          <div className="section" style={{ marginTop: 0, borderTop: 0, paddingTop: 0 }}>
+            <h2 className="h2">Overview</h2>
+            <div className="stat-grid">
+              <div className="stat">{category.terminology.timeLabel}<b>{formatDuration(project.totalTrackedSeconds)}</b></div>
+              <div className="stat">XP<b>{project.xp}</b></div>
+              <div className="stat">Level<b>{project.level}</b></div>
+              {hasCap(category, "versions") ? <div className="stat">Version<b>{project.currentVersion ?? "—"}</b></div> : null}
+              {hasCap(category, "grades") ? <div className="stat">Final grade<b>{project.finalGrade ?? "—"}</b></div> : null}
+              {hasCap(category, "attendance") && project.attendance ? <div className="stat">Attendance<b>{project.attendance.percent.toFixed(1)}%</b></div> : null}
+            </div>
+            {project.git?.isRepo ? <p className="muted">Git: {project.git.branch} {project.git.dirty ? "(dirty)" : ""} {project.git.ahead ? `↑${project.git.ahead}` : ""} {project.git.behind ? `↓${project.git.behind}` : ""} {project.git.lastCommit}</p> : null}
+            {project.git?.error && !project.git.isRepo ? <p className="muted">{project.git.error}</p> : null}
+          </div>
+          {hasCap(category, "grades") ? (
+            <div className="section">
+              <h2 className="h2">Final grade</h2>
+              <p className="muted">GPA only includes courses where you store an explicit final grade here.</p>
+              <GradeEditor project={project} onDone={reload} />
+            </div>
+          ) : null}
+          {hasCap(category, "links") ? (
+            <div className="section">
+              <h2 className="h2">Resources</h2>
+              {links.length === 0 ? <EmptyState title="No resources" body="Add a link you keep coming back to." /> : null}
+              {links.map((l) => (
+                <div key={l.id} className="list-row">
+                  <span className="list-row-title">{l.title}</span>
+                  <button className="btn ghost" type="button" onClick={() => void api.openUrl(l.url)}>Open</button>
+                </div>
+              ))}
+              <LinkEditor projectId={project.id} onDone={reload} />
+            </div>
+          ) : null}
+          <div className="section">
+            <h2 className="h2">Achievements</h2>
+            {project.achievements.length === 0 ? (
+              <EmptyState title="No trophies on this item yet" body="Keep tracking time and completing TODOs." />
+            ) : (
+              <TrophyRow items={project.achievements} />
+            )}
+          </div>
+          {category.kind !== "university" && category.kind !== "software" && hasCap(category, "timeTracking") ? (
+            <TimeEntries projectId={project.id} onChanged={reload} />
+          ) : null}
+        </>
+      ) : null}
+
+      {tab === "todos" ? (
+        <div className="section" style={{ marginTop: 0, borderTop: 0, paddingTop: 0 }}>
           <h2 className="h2">TODOs</h2>
           <TodoList projectId={project.id} categoryId={category.id} todos={todos} onChange={reload} />
         </div>
       ) : null}
-      {category.kind === "software" ? (
-        <SoftwareAiActions projectId={project.id} changelog={versions[0]?.changelog} onDone={reload} />
-      ) : null}
-      {hasCap(category, "developmentCommands") ? (
-        <div className="section">
-          <h2 className="h2">Commands</h2>
-          {commands.map((c) => (
-            <div key={c.id} className="list-row">
-              <span>{c.name}</span>
-              <button className="btn" type="button" onClick={() => {
-                const go = (confirmed?: boolean) => api.runCommand({ projectId, command: c.command, confirmed }).then((out) => {
-                  setOutput(out);
-                  toast(out.code === 0 ? "Finished" : `Exit ${out.code}`);
-                }).catch((e) => toast(formatError(e), "error"));
-                if (c.dangerous) confirm("Run dangerous command?", c.command, () => void go(true));
-                else void go();
-              }}>Run</button>
+
+      {tab === "study" ? (
+        <>
+          {hasCap(category, "todos") ? (
+            <div className="section" style={{ marginTop: 0, borderTop: 0, paddingTop: 0 }}>
+              <h2 className="h2">TODOs</h2>
+              <TodoList projectId={project.id} categoryId={category.id} todos={todos} onChange={reload} />
             </div>
-          ))}
-          {output ? (
-            <pre className="glass-panel" style={{ padding: 12, overflow: "auto", maxHeight: 240, fontSize: 12 }}>
-              {output.stdout || output.stderr || "(no output)"}
-            </pre>
           ) : null}
-          <CommandEditor projectId={project.id} onDone={reload} />
-        </div>
-      ) : null}
-      {hasCap(category, "versions") ? (
-        <div className="section">
-          <h2 className="h2">Versions</h2>
-          {versions.map((v) => <div key={v.version} className="list-row muted">{v.version} · {formatDate(v.releasedAt)} · {v.changelog}</div>)}
-          <VersionEditor projectId={project.id} onDone={reload} />
-        </div>
-      ) : null}
-      {hasCap(category, "topics") ? (
-        <div className="section">
-          <h2 className="h2">Topics</h2>
-          {topics.map((t) => <div key={t.id} className="list-row"><span>{t.title}</span><span className="badge">{t.status}</span><span className="muted">{formatDuration(t.trackedSeconds)}</span></div>)}
-          <TopicEditor projectId={project.id} onDone={reload} />
-        </div>
-      ) : null}
-      {hasCap(category, "files") ? (
-        <div className="section">
-          <h2 className="h2">{category.kind === "university" ? "Documents" : "Files"}</h2>
-          <p className="muted">Folder listings are cached. Refresh runs a shallow scan; deep indexing is a background job.</p>
-          <div className="row">
-            <button className="btn" type="button" onClick={() => api.scanProjectFolder(projectId).then((r) => setFolder(r as never))}>Refresh folder</button>
-            <button className="btn" type="button" onClick={async () => {
-              const path = await api.pickFile();
-              if (!path) return;
-              const name = path.split(/[\\/]/).pop() ?? path;
-              await api.addProjectFile({ projectId, displayName: name, absolutePath: path });
-              reload();
-            }}>Add file</button>
-          </div>
-          {files.map((f) => (
-            <div key={f.id} className="list-row">
-              <span>{f.displayName}{f.indexStage ? ` · ${f.indexStage}` : ""}{f.indexStatus && f.indexStatus !== "completed" ? ` (${f.indexStatus})` : ""}</span>
-              {f.indexLimitation ? <span className="muted">{f.indexLimitation}</span> : null}
-              {f.absolutePath ? <button className="btn" type="button" onClick={() => void api.openPath(f.absolutePath!)}>Open</button> : null}
-              {f.absolutePath ? <button className="btn" type="button" onClick={() => void api.revealPath(f.absolutePath!)}>Reveal</button> : null}
+          {hasCap(category, "topics") ? (
+            <div className="section">
+              <h2 className="h2">Topics</h2>
+              {topics.length === 0 ? <EmptyState title="No topics" body="Break the course into study units." /> : null}
+              {topics.map((t) => (
+                <div key={t.id} className="list-row">
+                  <span className="list-row-title">{t.title}</span>
+                  <span className="badge">{t.status}</span>
+                  <span className="list-row-meta">{formatDuration(t.trackedSeconds)}</span>
+                </div>
+              ))}
+              <TopicEditor projectId={project.id} onDone={reload} />
             </div>
-          ))}
-          {folder.map((f) => (
-            <div key={f.path} className="list-row">
-              <span>{f.isDir ? "Folder" : "File"} · {f.name}</span>
-              <button className="btn" type="button" onClick={() => void api.openPath(f.path)}>Open</button>
+          ) : null}
+          {hasCap(category, "timeTracking") ? <TimeEntries projectId={project.id} onChanged={reload} /> : null}
+          {hasCap(category, "attendance") ? (
+            <div className="section">
+              <h2 className="h2">Attendance</h2>
+              <p className="muted">Lessons are not time entries. Study time is tracked separately.</p>
+              {lessons.length === 0 ? <EmptyState title="No lessons yet" body="Log attended or missed sessions." /> : null}
+              {lessons.map((l) => (
+                <div key={l.id} className="list-row">
+                  <span className="list-row-title">{l.date}</span>
+                  <span className="list-row-meta">{l.attended ? "Attended" : "Missed"}</span>
+                </div>
+              ))}
+              <LessonEditor projectId={project.id} onDone={reload} />
             </div>
-          ))}
-        </div>
+          ) : null}
+        </>
       ) : null}
-      {hasCap(category, "exams") ? (
-        <div className="section">
+
+      {tab === "dev" ? (
+        <>
+          {hasCap(category, "timeTracking") ? <TimeEntries projectId={project.id} onChanged={reload} /> : null}
+          {category.kind === "software" ? <SoftwareAiActions projectId={project.id} changelog={versions[0]?.changelog} onDone={reload} /> : null}
+          {hasCap(category, "developmentCommands") ? (
+            <div className="section">
+              <h2 className="h2">Commands</h2>
+              {commands.length === 0 ? <EmptyState title="No commands" body="Save a pinned command to run it from here." /> : null}
+              {commands.map((c) => (
+                <div key={c.id} className="list-row">
+                  <span className="list-row-title">{c.name}</span>
+                  <span className="list-row-meta">{c.command}</span>
+                  <button className="btn" type="button" onClick={() => {
+                    const go = (confirmed?: boolean) => api.runCommand({ projectId, command: c.command, confirmed }).then((out) => {
+                      setOutput(out);
+                      toast(out.code === 0 ? "Finished" : `Exit ${out.code}`);
+                    }).catch((e) => toast(formatError(e), "error"));
+                    if (c.dangerous) confirm("Run dangerous command?", c.command, () => void go(true), true);
+                    else void go();
+                  }}>Run</button>
+                </div>
+              ))}
+              {output ? (
+                <pre className="glass-panel command-output">
+                  {output.stdout || output.stderr || "(no output)"}
+                </pre>
+              ) : null}
+              <CommandEditor projectId={project.id} onDone={reload} />
+            </div>
+          ) : null}
+          {hasCap(category, "versions") ? (
+            <div className="section">
+              <h2 className="h2">Versions</h2>
+              {versions.length === 0 ? <EmptyState title="No versions" body="Record a release when you ship." /> : null}
+              {versions.map((v) => (
+                <div key={v.version} className="list-row">
+                  <span className="list-row-title">{v.version}</span>
+                  <span className="list-row-meta">{formatDate(v.releasedAt)}{v.changelog ? ` · ${v.changelog}` : ""}</span>
+                </div>
+              ))}
+              <VersionEditor projectId={project.id} onDone={reload} />
+            </div>
+          ) : null}
+        </>
+      ) : null}
+
+      {tab === "exams" ? (
+        <div className="section" style={{ marginTop: 0, borderTop: 0, paddingTop: 0 }}>
           <h2 className="h2">Exams</h2>
-          {exams.map((e) => <div key={e.id} className="list-row muted">{formatDate(e.date)} · {formatExamStatus(e.status)} {e.grade != null ? `· ${e.grade}/30` : ""}</div>)}
+          {exams.length === 0 ? <EmptyState title="No exam attempts" body="Save a scheduled or completed attempt." /> : null}
+          {exams.map((e) => (
+            <div key={e.id} className="list-row">
+              <span className="list-row-title">{formatExamStatus(e.status)}</span>
+              <span className="list-row-meta">{formatDate(e.date)}{e.grade != null ? ` · ${e.grade}/30` : ""}</span>
+            </div>
+          ))}
           <ExamEditor projectId={project.id} onDone={reload} />
         </div>
       ) : null}
-      {hasCap(category, "attendance") ? (
-        <div className="section">
-          <h2 className="h2">Attendance</h2>
-          <p className="muted">Lessons are not time entries. Study time is tracked separately.</p>
-          {lessons.map((l) => <div key={l.id} className="list-row muted">{l.date} · {l.attended ? "attended" : "missed"}</div>)}
-          <LessonEditor projectId={project.id} onDone={reload} />
+
+      {tab === "files" || tab === "docs" ? filesPanel : null}
+    </div>
+  );
+}
+
+function MoreMenu({ children }: { children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const items = Children.toArray(children).filter(Boolean);
+  if (items.length === 0) return null;
+  return (
+    <div className="more-menu">
+      <button className="btn" type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        Open <ChevronDown size={14} />
+      </button>
+      {open ? (
+        <div className="menu-pop more-menu-pop glass-panel">
+          {children}
         </div>
       ) : null}
-      {hasCap(category, "links") ? (
-        <div className="section">
-          <h2 className="h2">Resources</h2>
-          {links.map((l) => (
-            <button key={l.id} className="btn ghost" type="button" onClick={() => void api.openUrl(l.url)}>{l.title}</button>
-          ))}
-          <LinkEditor projectId={project.id} onDone={reload} />
-        </div>
-      ) : null}
-      {hasCap(category, "grades") ? (
-        <div className="section">
-          <h2 className="h2">Final grade</h2>
-          <p className="muted">GPA only includes courses where you store an explicit final grade here.</p>
-          <GradeEditor project={project} onDone={reload} />
-        </div>
-      ) : null}
-      <div className="section">
-        <h2 className="h2">Achievements</h2>
-        <TrophyRow items={project.achievements} />
-      </div>
     </div>
   );
 }
@@ -253,7 +382,7 @@ function VersionEditor({ projectId, onDone }: { projectId: string; onDone: () =>
 function TopicEditor({ projectId, onDone }: { projectId: string; onDone: () => void }) {
   const [title, setTitle] = useState("");
   return (
-    <div className="row">
+    <div className="row" style={{ marginTop: 8 }}>
       <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Topic title" />
       <button className="btn" type="button" onClick={() => api.upsertTopic({ id: "", projectId, title, description: "", sortOrder: 0, status: "not_started", completionPercent: 0 }).then(() => { setTitle(""); onDone(); })}>Add topic</button>
     </div>
@@ -265,7 +394,7 @@ function ExamEditor({ projectId, onDone }: { projectId: string; onDone: () => vo
   const [grade, setGrade] = useState("");
   const [status, setStatus] = useState("scheduled");
   return (
-    <div className="row">
+    <div className="row" style={{ marginTop: 8 }}>
       <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
       <Select
         value={status}
@@ -282,7 +411,7 @@ function LessonEditor({ projectId, onDone }: { projectId: string; onDone: () => 
   const [date, setDate] = useState("");
   const [attended, setAttended] = useState(true);
   return (
-    <div className="row">
+    <div className="row" style={{ marginTop: 8 }}>
       <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
       <label className="row"><input type="checkbox" checked={attended} onChange={(e) => setAttended(e.target.checked)} /> Attended</label>
       <button className="btn" type="button" onClick={() => api.upsertLesson({ id: "", projectId, date, attended, durationSeconds: 3600 }).then(onDone)}>Add lesson</button>
@@ -294,7 +423,7 @@ function LinkEditor({ projectId, onDone }: { projectId: string; onDone: () => vo
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
   return (
-    <div className="row">
+    <div className="row" style={{ marginTop: 8 }}>
       <input className="input" placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
       <input className="input" placeholder="https://" value={url} onChange={(e) => setUrl(e.target.value)} />
       <button className="btn" type="button" onClick={() => api.upsertLink({ id: "", projectId, title, url, pinned: false, sortOrder: 0 }).then(onDone)}>Add link</button>
