@@ -194,7 +194,8 @@ pub struct AppSettingsDto {
     pub default_workspace: Option<String>,
     pub automatic_updates: bool,
     pub update_channel: String,
-    pub raw_version_url: String,
+    #[serde(default)]
+    pub launch_at_startup: bool,
     pub git_path: String,
     pub vscode_path: String,
     pub terminal: String,

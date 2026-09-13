@@ -1,7 +1,6 @@
 import { createContext, useContext, useState } from "react";
 import { Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
-  Activity,
   Award,
   BookOpen,
   Code2,
@@ -100,7 +99,7 @@ export function RootChrome() {
           <div className="muted" style={{ fontSize: 11, letterSpacing: "0.12em", marginTop: 12 }}>
             {currentCategory.name.toUpperCase()}
           </div>
-          {currentCategory.nav.map((item) => {
+          {currentCategory.nav.filter((item) => item.id !== "activity").map((item) => {
             const page = (item.id === "overview" ? "overview" : item.id === "items" ? "items" : item.id) as WorkspacePage;
             const active = route.name === "workspace" && (route.page === page || (item.id === "items" && route.page === "items"));
             const Icon = item.id === "overview" ? LayoutDashboard : item.id === "todos" ? ListTodo : item.id === "commands" ? Terminal : item.id === "exams" ? BookOpen : Code2;
@@ -113,7 +112,6 @@ export function RootChrome() {
         </div>
         <div style={{ flex: 1 }} />
         <button className="nav-btn" type="button" onClick={() => go({ name: "achievements" })}><Award size={15} /> Achievements</button>
-        <button className="nav-btn" type="button" onClick={() => go({ name: "activity" })}><Activity size={15} /> Activity</button>
         <button className="nav-btn" type="button" onClick={() => go({ name: "settings", tab: "appearance" })}><SettingsIcon size={15} /> Settings</button>
         <div className="row muted" style={{ fontSize: 11, marginTop: 8 }}>
           <span className={`sync-dot ${bootstrap.sync.status === "sync_error" ? "error" : bootstrap.sync.pending ? "pending" : ""}`} />

@@ -24,6 +24,7 @@
     "os:default",
     "process:default",
     "updater:default",
+    "autostart:default",
     "core:tray:default"
   ]
 }

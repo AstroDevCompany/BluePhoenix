@@ -151,16 +151,20 @@ function Updates({ settings, onSave }: { settings: Settings; onSave: (s: Setting
   const [result, setResult] = useState<string>("");
   return (
     <section className="glass-panel settings-card">
-      <label className="check-row"><input type="checkbox" checked={settings.automaticUpdates} onChange={(e) => onSave({ ...settings, automaticUpdates: e.target.checked })} /> Automatic updates</label>
+      <label className="check-row">
+        <input type="checkbox" checked={settings.automaticUpdates} onChange={(e) => onSave({ ...settings, automaticUpdates: e.target.checked })} />
+        Check for updates on launch
+      </label>
+      <label className="check-row">
+        <input type="checkbox" checked={Boolean(settings.launchAtStartup)} onChange={(e) => onSave({ ...settings, launchAtStartup: e.target.checked })} />
+        Launch BluePhoenix with the system
+      </label>
       <label className="field"><span className="label">Channel</span>
         <Select
           value={settings.updateChannel}
           onChange={(updateChannel) => onSave({ ...settings, updateChannel })}
           options={[{ value: "stable", label: "Stable" }, { value: "beta", label: "Beta" }]}
         />
-      </label>
-      <label className="field"><span className="label">RAW version URL</span>
-        <input className="input" value={settings.rawVersionUrl} onChange={(e) => onSave({ ...settings, rawVersionUrl: e.target.value })} />
       </label>
       <button className="btn" type="button" onClick={async () => {
         const r = await api.checkForUpdates() as { local: string; remote?: string; newer: boolean; error?: string };

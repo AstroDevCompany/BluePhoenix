@@ -119,7 +119,7 @@ export type Settings = {
   defaultWorkspace?: string | null;
   automaticUpdates: boolean;
   updateChannel: string;
-  rawVersionUrl: string;
+  launchAtStartup: boolean;
   gitPath: string;
   vscodePath: string;
   terminal: string;

@@ -5,6 +5,7 @@ import { AppRouter, router } from "./appRouter";
 import { ShellProvider } from "./pages/Shell";
 import { parsePath, pathFor } from "./components/router";
 import { LoadingScreen } from "./components/LoadingScreen";
+import { useUi } from "./stores/ui";
 
 function hideHtmlSplash() {
   document.getElementById("boot-splash")?.setAttribute("hidden", "");
@@ -67,6 +68,16 @@ export default function App() {
   }, []);
 
   const ready = Boolean(bootstrap) && minTimeElapsed;
+
+  useEffect(() => {
+    if (!ready || !bootstrap?.settings.automaticUpdates) return;
+    void api.checkForUpdates().then((r) => {
+      const result = r as { newer?: boolean; remote?: string };
+      if (result.newer) {
+        useUi.getState().showToast(`Update available${result.remote ? `: ${result.remote}` : ""}`);
+      }
+    }).catch(() => undefined);
+  }, [ready, bootstrap?.settings.automaticUpdates]);
 
   useEffect(() => {
     if (ready || error) {

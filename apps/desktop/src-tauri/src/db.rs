@@ -131,10 +131,7 @@ fn seed_settings(conn: &Connection) -> AppResult<()> {
         ("workspace.defaultCategoryId", SOFTWARE_CATEGORY_ID),
         ("updates.automatic", "true"),
         ("updates.channel", "stable"),
-        (
-            "updates.rawUrl",
-            "https://raw.githubusercontent.com/bluephoenix-app/bluephoenix/main/version.json",
-        ),
+        ("general.launchAtStartup", "false"),
         ("developer.gitPath", ""),
         ("developer.vscodePath", ""),
         ("developer.terminal", "default"),
@@ -262,11 +259,7 @@ pub fn load_settings(conn: &Connection) -> AppSettingsDto {
         default_workspace: Some(setting(conn, "workspace.defaultCategoryId", SOFTWARE_CATEGORY_ID)),
         automatic_updates: setting(conn, "updates.automatic", "true") != "false",
         update_channel: setting(conn, "updates.channel", "stable"),
-        raw_version_url: setting(
-            conn,
-            "updates.rawUrl",
-            "https://raw.githubusercontent.com/bluephoenix-app/bluephoenix/main/version.json",
-        ),
+        launch_at_startup: setting(conn, "general.launchAtStartup", "false") == "true",
         git_path: setting(conn, "developer.gitPath", ""),
         vscode_path: setting(conn, "developer.vscodePath", ""),
         terminal: setting(conn, "developer.terminal", "default"),
@@ -294,7 +287,11 @@ pub fn save_settings(conn: &Connection, settings: &AppSettingsDto) -> AppResult<
         if settings.automatic_updates { "true" } else { "false" },
     )?;
     set_setting(conn, "updates.channel", &settings.update_channel)?;
-    set_setting(conn, "updates.rawUrl", &settings.raw_version_url)?;
+    set_setting(
+        conn,
+        "general.launchAtStartup",
+        if settings.launch_at_startup { "true" } else { "false" },
+    )?;
     set_setting(conn, "developer.gitPath", &settings.git_path)?;
     set_setting(conn, "developer.vscodePath", &settings.vscode_path)?;
     set_setting(conn, "developer.terminal", &settings.terminal)?;

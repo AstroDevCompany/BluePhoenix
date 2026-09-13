@@ -1,6 +1,8 @@
-use crate::error::{AppError, AppResult};
 use crate::models::UpdateCheckDto;
 use bluephoenix_domain::semver_check::{is_newer, parse_version_json};
+
+pub const VERSION_CHECK_URL: &str =
+    "https://raw.githubusercontent.com/bluephoenix-app/bluephoenix/main/version.json";
 
 pub async fn check_raw(url: &str, local: &str) -> UpdateCheckDto {
     if url.trim().is_empty() {
@@ -8,7 +10,7 @@ pub async fn check_raw(url: &str, local: &str) -> UpdateCheckDto {
             local: local.to_string(),
             remote: None,
             newer: false,
-            error: Some("RAW version URL is not configured".into()),
+            error: Some("Update check is not configured".into()),
         };
     }
     let client = match reqwest::Client::builder()
@@ -80,12 +82,4 @@ pub async fn check_raw(url: &str, local: &str) -> UpdateCheckDto {
 
 pub fn local_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
-}
-
-pub fn validate_url(url: &str) -> AppResult<()> {
-    if url.starts_with("https://") || url.starts_with("http://") {
-        Ok(())
-    } else {
-        Err(AppError::msg("RAW version URL must be http(s)"))
-    }
 }

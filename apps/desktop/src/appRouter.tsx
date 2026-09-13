@@ -11,7 +11,6 @@ import type { WorkspacePage } from "./components/router";
 import { WorkspaceHome } from "./pages/WorkspacePages";
 import { SettingsPage } from "./pages/SettingsPage";
 import { AchievementsPage } from "./features/achievements/AchievementsPage";
-import { ActivityPage } from "./features/activity/ActivityPage";
 import { RootChrome, useShell } from "./pages/Shell";
 
 const rootRoute = createRootRoute({
@@ -87,12 +86,6 @@ const achievementsRoute = createRoute({
   component: AchievementsPage,
 });
 
-const activityRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/activity",
-  component: ActivityPage,
-});
-
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings/$tab",
@@ -125,7 +118,6 @@ const routeTree = rootRoute.addChildren([
   projectRoute,
   workspaceRoute,
   achievementsRoute,
-  activityRoute,
   settingsRoute,
 ]);
 

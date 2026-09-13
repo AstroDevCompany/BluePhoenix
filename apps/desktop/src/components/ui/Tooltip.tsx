@@ -8,10 +8,25 @@ import {
 import { createPortal } from "react-dom";
 
 const GAP = 8;
+const BOTTOM_GAP = 12;
 const MARGIN = 12;
 
-function placeAbove(anchor: DOMRect, tipWidth: number, tipHeight: number) {
-  const top = Math.max(MARGIN, anchor.top - tipHeight - GAP);
+export type TooltipPlacement = "top" | "bottom";
+
+function placeTooltip(
+  anchor: DOMRect,
+  tipWidth: number,
+  tipHeight: number,
+  placement: TooltipPlacement,
+) {
+  const below = anchor.bottom + (placement === "bottom" ? BOTTOM_GAP : GAP);
+  const above = anchor.top - tipHeight - GAP;
+  const top =
+    placement === "bottom"
+      ? Math.min(below, window.innerHeight - tipHeight - MARGIN)
+      : above < MARGIN
+        ? below
+        : above;
   const left = Math.min(
     window.innerWidth - tipWidth - MARGIN,
     Math.max(MARGIN, anchor.left + anchor.width / 2 - tipWidth / 2),
@@ -23,10 +38,12 @@ export function Tooltip({
   content,
   children,
   rich,
+  placement = "top",
 }: {
   content: ReactNode;
   children: ReactNode;
   rich?: boolean;
+  placement?: TooltipPlacement;
 }) {
   const hostRef = useRef<HTMLSpanElement>(null);
   const tipRef = useRef<HTMLDivElement>(null);
@@ -42,7 +59,7 @@ export function Tooltip({
       const host = hostRef.current;
       const tip = tipRef.current;
       if (!host || !tip) return;
-      setCoords(placeAbove(host.getBoundingClientRect(), tip.offsetWidth, tip.offsetHeight));
+      setCoords(placeTooltip(host.getBoundingClientRect(), tip.offsetWidth, tip.offsetHeight, placement));
     };
     update();
     const extra = requestAnimationFrame(update);
@@ -56,7 +73,7 @@ export function Tooltip({
       window.removeEventListener("scroll", update, true);
       ro.disconnect();
     };
-  }, [open]);
+  }, [open, placement]);
 
   return (
     <span
@@ -74,6 +91,7 @@ export function Tooltip({
               ref={tipRef}
               role="tooltip"
               className={rich ? "ui-tooltip achievement-tip" : "ui-tooltip"}
+              data-placement={placement}
               style={{
                 top: coords?.top ?? 0,
                 left: coords?.left ?? 0,

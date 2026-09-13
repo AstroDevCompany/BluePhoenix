@@ -6,6 +6,8 @@ mod documents;
 mod error;
 mod git;
 mod jobs;
+#[cfg(target_os = "macos")]
+mod macos;
 mod models;
 mod native;
 mod secrets;
@@ -36,6 +38,10 @@ pub fn run() {
             #[cfg(desktop)]
             {
                 let _ = app.handle().plugin(tauri_plugin_updater::Builder::new().build());
+                let _ = app.handle().plugin(tauri_plugin_autostart::init(
+                    tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+                    None,
+                ));
             }
             let dir = data_dir().expect("data dir");
             let db = Db::open(&dir.join("bluephoenix.sqlite")).expect("open sqlite");
@@ -45,11 +51,18 @@ pub fn run() {
                 .expect("http");
             app.manage(AppState { db, http });
             crate::jobs::spawn(app.handle().clone());
+            #[cfg(desktop)]
+            {
+                crate::commands::sync_launch_at_startup(app.handle());
+            }
 
             if let Some(window) = app.get_webview_window("main") {
                 #[cfg(target_os = "macos")]
                 {
+                    let _ = window.set_decorations(true);
                     let _ = window.set_title_bar_style(tauri::TitleBarStyle::Overlay);
+                    let _ = window.set_title("");
+                    crate::macos::install(&window);
                 }
                 let _ = window.set_shadow(true);
                 if let Some(icon) = app.default_window_icon() {

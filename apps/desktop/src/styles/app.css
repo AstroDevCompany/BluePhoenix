@@ -212,7 +212,19 @@ button,
 }
 
 .titlebar[data-platform="macos"] {
-  padding-left: 78px;
+  padding-left: 0;
+}
+
+.titlebar-lights {
+  display: none;
+  flex: 0 0 84px;
+  width: 84px;
+  height: 100%;
+  pointer-events: none;
+}
+
+.titlebar[data-platform="macos"] .titlebar-lights {
+  display: block;
 }
 
 .titlebar-drag {
@@ -550,9 +562,23 @@ body:not(.app-ready) .app-atmosphere {
   border-color: rgba(248, 113, 113, 0.5);
 }
 
-.btn.ghost {
+.btn.ghost:not(.primary) {
   background: rgba(0, 0, 0, 0.22);
   box-shadow: none;
+}
+
+.titlebar-ai.primary {
+  background: #3dd6c6;
+  border-color: transparent;
+  color: #04211c;
+  opacity: 1;
+  box-shadow: 0 8px 24px rgba(61, 214, 198, 0.28);
+}
+
+.titlebar-ai.primary:hover {
+  background: #5ee4d4;
+  border-color: transparent;
+  color: #04211c;
 }
 
 .btn.icon {
@@ -1120,6 +1146,15 @@ body:not(.app-ready) .app-atmosphere {
   to { opacity: 1; transform: none; }
 }
 
+.ui-tooltip[data-placement="bottom"] {
+  animation-name: tip-in-below;
+}
+
+@keyframes tip-in-below {
+  from { opacity: 0; transform: translateY(-6px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+
 .rainbow-text {
   background: linear-gradient(90deg, #7dd3fc, #67e8f9, #34d399, #fbbf24, #f472b6, #7dd3fc);
   background-size: 300% 100%;
@@ -1306,6 +1341,7 @@ body:not(.app-ready) .app-atmosphere {
 .titlebar-ai {
   height: 28px;
   margin-inline: var(--space-2);
+  flex: 0 0 auto;
 }
 
 .ai-rail {

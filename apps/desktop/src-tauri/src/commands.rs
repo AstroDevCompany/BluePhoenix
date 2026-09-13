@@ -7,7 +7,7 @@ use bluephoenix_domain::context::TodoFilter;
 use serde::Deserialize;
 use std::path::PathBuf;
 use std::process::Command;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 use tauri_plugin_opener::OpenerExt;
 
 #[tauri::command]
@@ -21,11 +21,32 @@ pub fn get_settings(state: State<AppState>) -> AppResult<AppSettingsDto> {
 }
 
 #[tauri::command]
-pub fn save_settings(state: State<AppState>, settings: AppSettingsDto) -> AppResult<AppSettingsDto> {
-    state.db.with(|c| {
-        db::save_settings(c, &settings)?;
-        Ok(db::load_settings(c))
-    })
+pub fn save_settings(app: AppHandle, state: State<AppState>, settings: AppSettingsDto) -> AppResult<AppSettingsDto> {
+    state.db.with(|c| db::save_settings(c, &settings))?;
+    apply_launch_at_startup(&app, settings.launch_at_startup);
+    state.db.with(|c| Ok(db::load_settings(c)))
+}
+
+pub fn sync_launch_at_startup(app: &AppHandle) {
+    let enabled = app
+        .try_state::<AppState>()
+        .and_then(|state| state.db.with(|c| Ok(db::load_settings(c).launch_at_startup)).ok())
+        .unwrap_or(false);
+    apply_launch_at_startup(app, enabled);
+}
+
+fn apply_launch_at_startup(app: &AppHandle, enabled: bool) {
+    #[cfg(desktop)]
+    {
+        use tauri_plugin_autostart::ManagerExt;
+        let launcher = app.autolaunch();
+        let _ = if enabled {
+            launcher.enable()
+        } else {
+            launcher.disable()
+        };
+    }
+    let _ = (app, enabled);
 }
 
 #[tauri::command]
@@ -626,20 +647,9 @@ pub fn sync_status(state: State<AppState>) -> AppResult<SyncStatusDto> {
 }
 
 #[tauri::command]
-pub async fn check_for_updates(state: State<'_, AppState>) -> AppResult<UpdateCheckDto> {
-    let (url, local) = state.db.with(|c| {
-        let s = db::load_settings(c);
-        Ok((s.raw_version_url, crate::updater::local_version()))
-    })?;
-    if crate::updater::validate_url(&url).is_err() {
-        return Ok(UpdateCheckDto {
-            local,
-            remote: None,
-            newer: false,
-            error: Some("RAW version URL must be http(s)".into()),
-        });
-    }
-    Ok(crate::updater::check_raw(&url, &local).await)
+pub async fn check_for_updates() -> AppResult<UpdateCheckDto> {
+    let local = crate::updater::local_version();
+    Ok(crate::updater::check_raw(crate::updater::VERSION_CHECK_URL, &local).await)
 }
 
 #[tauri::command]

@@ -1,0 +1,24 @@
+{
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "BluePhoenix",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1100,
+        "minHeight": 720,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true,
+        "hiddenTitle": true,
+        "titleBarStyle": "Overlay",
+        "trafficLightPosition": { "x": 16, "y": 28 },
+        "transparent": false,
+        "shadow": true,
+        "center": true,
+        "backgroundColor": "#000000"
+      }
+    ]
+  }
+}

@@ -37,7 +37,6 @@ export function CommandPalette({
     const actions = [
       { title: "Open Settings", subtitle: "Preferences", run: () => onNavigate({ name: "settings", tab: "appearance" }) },
       { title: "Open Achievements", subtitle: "Progress", run: () => onNavigate({ name: "achievements" }) },
-      { title: "Open Activity", subtitle: "Timeline", run: () => onNavigate({ name: "activity" }) },
       { title: "Sync now", subtitle: "Cloud", run: () => { void api.pushSync().then(() => toast("Sync complete")).catch((e) => toast(formatError(e), "error")); } },
     ];
     for (const c of enabled) {
