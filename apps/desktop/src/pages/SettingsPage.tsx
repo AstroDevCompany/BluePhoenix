@@ -112,7 +112,7 @@ export function SettingsPage({
         </section>
       ) : null}
       {current === "account" ? (
-        <Account settings={settings} onSave={save} />
+        <Account />
       ) : null}
       {current === "ai" ? <AiSettingsPanel /> : null}
       {current === "data" ? (
@@ -180,15 +180,12 @@ function Updates({ settings, onSave }: { settings: Settings; onSave: (s: Setting
   );
 }
 
-function Account({ settings, onSave }: { settings: Settings; onSave: (s: Settings) => void }) {
+function Account() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const toast = useUi((s) => s.showToast);
   return (
     <section className="glass-panel settings-card">
-      <label className="field"><span className="label">API base</span>
-        <input className="input" value={settings.apiBase} onChange={(e) => onSave({ ...settings, apiBase: e.target.value })} />
-      </label>
       <label className="field"><span className="label">Email</span><input className="input" value={email} onChange={(e) => setEmail(e.target.value)} /></label>
       <label className="field"><span className="label">Password</span><input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
       <div className="row">

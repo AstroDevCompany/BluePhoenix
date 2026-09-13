@@ -28,4 +28,4 @@ Auth session tokens never use that path.
 
 Synced · Syncing… · Offline · Changes pending · Sync error
 
-Sign in under Settings → Account. Set the API base to your Axum server. `claim-local` uploads this device's pending changes after login. Polling retries every 30 seconds if the websocket is down.
+Sign in under Settings → Account. The desktop client talks to the app-owned `/v1` host. `claim-local` uploads this device's pending changes after login. Polling retries every 30 seconds if the websocket is down.

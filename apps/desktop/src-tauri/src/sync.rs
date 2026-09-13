@@ -23,12 +23,10 @@ struct TokenRes {
     user: Option<serde_json::Value>,
 }
 
-fn api_base(state: &AppState) -> String {
-    state
-        .db
-        .with(|c| Ok(db::load_settings(c).api_base))
-        .unwrap_or_else(|_| "http://127.0.0.1:8787".into())
-}
+pub const API_BASE: &str = match option_env!("BLUEPHOENIX_API_BASE") {
+    Some(url) => url,
+    None => "http://127.0.0.1:8787",
+};
 
 pub async fn register(
     state: &AppState,
@@ -36,7 +34,7 @@ pub async fn register(
     password: String,
     display_name: Option<String>,
 ) -> AppResult<serde_json::Value> {
-    let base = api_base(state);
+    let base = API_BASE;
     let res = state
         .http
         .post(format!("{base}/v1/auth/register"))
@@ -68,7 +66,7 @@ pub async fn login(
     email: String,
     password: String,
 ) -> AppResult<serde_json::Value> {
-    let base = api_base(state);
+    let base = API_BASE;
     let res = state
         .http
         .post(format!("{base}/v1/auth/login"))
@@ -98,7 +96,7 @@ pub fn logout(state: &AppState) -> AppResult<()> {
 }
 
 pub async fn forgot(state: &AppState, email: String) -> AppResult<()> {
-    let base = api_base(state);
+    let base = API_BASE;
     let _ = state
         .http
         .post(format!("{base}/v1/auth/forgot"))
@@ -116,7 +114,7 @@ fn persist_tokens(tokens: &TokenRes) -> AppResult<()> {
 }
 
 async fn claim_local(state: &AppState, access: &str) -> AppResult<()> {
-    let base = api_base(state);
+    let base = API_BASE;
     let _ = state
         .http
         .post(format!("{base}/v1/account/claim-local"))
@@ -138,7 +136,7 @@ pub async fn push_and_pull(state: &AppState) -> AppResult<SyncStatusDto> {
             Ok(status)
         });
     };
-    let base = api_base(state);
+    let base = API_BASE;
     let device_id = state.db.device_id.clone();
 
     let batch = state.db.with(|c| db::pending_outbox(c))?;

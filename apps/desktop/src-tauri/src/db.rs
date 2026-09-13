@@ -136,7 +136,6 @@ fn seed_settings(conn: &Connection) -> AppResult<()> {
         ("developer.vscodePath", ""),
         ("developer.terminal", "default"),
         ("developer.shell", ""),
-        ("account.apiBase", "http://127.0.0.1:8787"),
         ("grading.includeFailed", "false"),
         ("onboarding.complete", "false"),
         ("ai.reserved", "{}"),
@@ -334,7 +333,6 @@ pub fn load_settings(conn: &Connection) -> AppSettingsDto {
         vscode_path: setting(conn, "developer.vscodePath", ""),
         terminal: setting(conn, "developer.terminal", "default"),
         shell: setting(conn, "developer.shell", ""),
-        api_base: setting(conn, "account.apiBase", "http://127.0.0.1:8787"),
         include_failed_grades: setting(conn, "grading.includeFailed", "false") == "true",
         onboarding_complete: setting(conn, "onboarding.complete", "false") == "true",
     }
@@ -378,7 +376,6 @@ pub fn save_settings(conn: &Connection, settings: &AppSettingsDto) -> AppResult<
     set_setting(conn, "developer.vscodePath", &settings.vscode_path)?;
     set_setting(conn, "developer.terminal", &settings.terminal)?;
     set_setting(conn, "developer.shell", &settings.shell)?;
-    set_setting(conn, "account.apiBase", &settings.api_base)?;
     set_setting(
         conn,
         "grading.includeFailed",

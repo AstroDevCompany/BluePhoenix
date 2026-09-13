@@ -124,7 +124,6 @@ export type Settings = {
   vscodePath: string;
   terminal: string;
   shell: string;
-  apiBase: string;
   includeFailedGrades: boolean;
   onboardingComplete: boolean;
 };

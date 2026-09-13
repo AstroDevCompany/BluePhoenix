@@ -200,7 +200,6 @@ pub struct AppSettingsDto {
     pub vscode_path: String,
     pub terminal: String,
     pub shell: String,
-    pub api_base: String,
     pub include_failed_grades: bool,
     pub onboarding_complete: bool,
 }
