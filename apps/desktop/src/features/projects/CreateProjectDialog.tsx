@@ -4,6 +4,7 @@ import type { Bootstrap, Tag } from "../../lib/types";
 import { api, formatError } from "../../lib/ipc";
 import { useUi } from "../../stores/ui";
 import { IconButton, Tooltip } from "../../components/ui/Tooltip";
+import { Overlay } from "../../components/ui/Overlay";
 
 export function CreateProjectDialog({
   bootstrap,
@@ -104,8 +105,8 @@ export function CreateProjectDialog({
   const fields = useMemo(() => kind, [kind]);
 
   return (
-    <div className="overlay" onClick={onClose}>
-      <div className="dialog" onClick={(e) => e.stopPropagation()}>
+    <Overlay onDismiss={onClose}>
+      <div className="dialog" role="dialog" aria-modal="true">
         <h2 className="h2">What are you creating?</h2>
         <div className="row" style={{ marginBottom: 16 }}>
           {enabled.map((c) => (
@@ -179,7 +180,7 @@ export function CreateProjectDialog({
           <button className="btn primary" type="button" disabled={busy || filling || !name.trim()} onClick={() => void submit()}>Create</button>
         </div>
       </div>
-    </div>
+    </Overlay>
   );
 }
 

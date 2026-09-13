@@ -23,6 +23,7 @@ import { TabCreateDialog } from "../components/TabCreateDialog";
 import { AiChatPanel } from "../features/ai/AiChatPanel";
 import { AiSetupPopup } from "../features/ai/AiSetupPopup";
 import { applyWorkspaceColor } from "../lib/theme";
+import { Overlay } from "../components/ui/Overlay";
 
 export type ShellApi = {
   bootstrap: Bootstrap;
@@ -168,8 +169,8 @@ export function RootChrome() {
       <CommandPalette bootstrap={bootstrap} onNavigate={go} />
       {toast ? <div className={`toast ${toast.tone === "error" ? "error" : ""}`} role="status">{toast.message}</div> : null}
       {confirm ? (
-        <div className="overlay" onClick={closeConfirm}>
-          <div className="dialog" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+        <Overlay onDismiss={closeConfirm}>
+          <div className="dialog" role="dialog" aria-modal="true">
             <h2 className="h2">{confirm.title}</h2>
             <p className="muted">{confirm.body}</p>
             <div className="row" style={{ justifyContent: "flex-end" }}>
@@ -177,7 +178,7 @@ export function RootChrome() {
               <button className={`btn ${confirm.danger ? "danger" : "primary"}`} type="button" onClick={() => { confirm.onConfirm(); closeConfirm(); }}>Confirm</button>
             </div>
           </div>
-        </div>
+        </Overlay>
       ) : null}
     </div>
   );

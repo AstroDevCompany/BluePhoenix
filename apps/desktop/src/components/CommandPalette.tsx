@@ -3,6 +3,7 @@ import type { Bootstrap } from "../lib/types";
 import { api, formatError } from "../lib/ipc";
 import { useUi } from "../stores/ui";
 import type { Route } from "./router";
+import { Overlay } from "./ui/Overlay";
 
 export function CommandPalette({
   bootstrap,
@@ -86,8 +87,8 @@ export function CommandPalette({
 
   if (!open) return null;
   return (
-    <div className="overlay" onClick={() => setPalette(false)}>
-      <div className="palette menu-pop" onClick={(e) => e.stopPropagation()}>
+    <Overlay onDismiss={() => setPalette(false)}>
+      <div className="palette menu-pop">
         <input
           autoFocus
           placeholder="Search projects, courses, TODOs, actions…"
@@ -149,6 +150,6 @@ export function CommandPalette({
           ))}
         </div>
       </div>
-    </div>
+    </Overlay>
   );
 }

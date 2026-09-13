@@ -4,6 +4,7 @@ import { api, formatError } from "../lib/ipc";
 import { EXAM_STATUS_OPTIONS } from "../lib/format";
 import { useUi } from "../stores/ui";
 import { Select } from "./ui/Select";
+import { Overlay } from "./ui/Overlay";
 
 export type TabCreateKind = "todo" | "exam" | "command";
 
@@ -86,8 +87,8 @@ export function TabCreateDialog({
   };
 
   return (
-    <div className="overlay" onClick={onClose}>
-      <div className="dialog" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+    <Overlay onDismiss={onClose}>
+      <div className="dialog" role="dialog" aria-modal="true">
         <h2 className="h2">{heading}</h2>
         {projects.length === 0 ? (
           <p className="muted">Create a {item} first, then you can add this from here.</p>
@@ -146,6 +147,6 @@ export function TabCreateDialog({
           ) : null}
         </div>
       </div>
-    </div>
+    </Overlay>
   );
 }

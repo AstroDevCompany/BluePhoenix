@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api, formatError } from "../../lib/ipc";
 import { useUi } from "../../stores/ui";
 import type { AiStatus } from "../../lib/types";
+import { Overlay } from "../../components/ui/Overlay";
 
 export function AiSetupPopup() {
   const toast = useUi((s) => s.showToast);
@@ -29,8 +30,8 @@ export function AiSetupPopup() {
   };
 
   return (
-    <div className="overlay" onClick={() => undefined}>
-      <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="ai-setup-title" onClick={(e) => e.stopPropagation()}>
+    <Overlay>
+      <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="ai-setup-title">
         <h2 className="h2" id="ai-setup-title">Optional AI</h2>
         <p className="muted">Add an OpenRouter key for chat, search interpretation, and software helpers. You can skip this and use BluePhoenix as usual.</p>
         <label className="field">
@@ -50,6 +51,6 @@ export function AiSetupPopup() {
           }}>Set up AI</button>
         </div>
       </div>
-    </div>
+    </Overlay>
   );
 }
