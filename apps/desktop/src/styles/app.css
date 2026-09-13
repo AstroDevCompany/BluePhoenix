@@ -1132,13 +1132,23 @@ body:not(.app-ready) .app-atmosphere {
 }
 
 .ui-tooltip.achievement-tip {
+  width: 240px;
+  max-width: min(240px, calc(100vw - 24px));
   padding: 18px var(--space-4) var(--space-4);
   border-radius: var(--radius-md);
   border-color: var(--border-glow);
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .achievement-tip .muted {
   color: var(--text-muted);
+  white-space: normal;
+}
+
+.achievement-tip .rainbow-text {
+  white-space: normal;
 }
 
 @keyframes tip-in {
