@@ -161,7 +161,16 @@ export function ProjectDetail({ category, projectId }: { category: Category; pro
         <div className="section">
           <h2 className="h2">{category.kind === "university" ? "Documents" : "Files"}</h2>
           <p className="muted">Folder listings are cached. Refresh runs a shallow scan; deep indexing is a background job.</p>
-          <button className="btn" type="button" onClick={() => api.scanProjectFolder(projectId).then((r) => setFolder(r as never))}>Refresh folder</button>
+          <div className="row">
+            <button className="btn" type="button" onClick={() => api.scanProjectFolder(projectId).then((r) => setFolder(r as never))}>Refresh folder</button>
+            <button className="btn" type="button" onClick={async () => {
+              const path = await api.pickFile();
+              if (!path) return;
+              const name = path.split(/[\\/]/).pop() ?? path;
+              await api.addProjectFile({ projectId, displayName: name, absolutePath: path });
+              reload();
+            }}>Add file</button>
+          </div>
           {files.map((f) => (
             <div key={f.id} className="list-row">
               <span>{f.displayName}{f.indexStage ? ` · ${f.indexStage}` : ""}{f.indexStatus && f.indexStatus !== "completed" ? ` (${f.indexStatus})` : ""}</span>
@@ -176,13 +185,6 @@ export function ProjectDetail({ category, projectId }: { category: Category; pro
               <button className="btn" type="button" onClick={() => void api.openPath(f.path)}>Open</button>
             </div>
           ))}
-          <button className="btn" type="button" onClick={async () => {
-            const path = await api.pickFile();
-            if (!path) return;
-            const name = path.split(/[\\/]/).pop() ?? path;
-            await api.addProjectFile({ projectId, displayName: name, absolutePath: path });
-            reload();
-          }}>Add file</button>
         </div>
       ) : null}
       {hasCap(category, "exams") ? (
