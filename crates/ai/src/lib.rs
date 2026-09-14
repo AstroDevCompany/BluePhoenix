@@ -28,8 +28,9 @@ pub use schema::{
     SoftwareFolderDraft, TodoOrderItem, TodoProposal,
 };
 pub use settings::{
-    AiProviderKind, AiSettings, ACTIVE_FALLBACK_SLOTS, DEFAULT_LOCAL_CTX_LEN, MAX_MODEL_SLOTS,
-    OPENROUTER_SECRET_KIND, SETTINGS_NAMESPACE,
+    local_ctx_len_for_model, AiProviderKind, AiSettings, ACTIVE_FALLBACK_SLOTS,
+    DEFAULT_LOCAL_CTX_LEN, MAX_MODEL_SLOTS, MIN_LOCAL_CTX_LEN, OPENROUTER_SECRET_KIND,
+    SETTINGS_NAMESPACE,
 };
 
 pub const JOB_INDEX_FILES: &str = "index_files";

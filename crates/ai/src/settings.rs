@@ -6,7 +6,6 @@ pub const MAX_MODEL_SLOTS: usize = 4;
 pub const ACTIVE_FALLBACK_SLOTS: usize = MAX_MODEL_SLOTS;
 pub const DEFAULT_LOCAL_CTX_LEN: u32 = 8192;
 pub const MIN_LOCAL_CTX_LEN: u32 = 512;
-pub const MAX_LOCAL_CTX_LEN: u32 = 131_072;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
@@ -55,6 +54,11 @@ fn default_local_ctx_len() -> u32 {
     DEFAULT_LOCAL_CTX_LEN
 }
 
+/// Trained GGUF context length. `None` if the file has no usable value.
+pub fn local_ctx_len_for_model(n_ctx_train: Option<u32>) -> Option<u32> {
+    n_ctx_train.filter(|n| *n > 0)
+}
+
 fn default_true() -> bool {
     true
 }
@@ -87,9 +91,7 @@ impl AiSettings {
             .take()
             .map(|id| id.trim().to_string())
             .filter(|id| !id.is_empty());
-        self.local_ctx_len = self
-            .local_ctx_len
-            .clamp(MIN_LOCAL_CTX_LEN, MAX_LOCAL_CTX_LEN);
+        self.local_ctx_len = self.local_ctx_len.max(MIN_LOCAL_CTX_LEN);
         self.local_idle_unload_minutes = self.local_idle_unload_minutes.min(24 * 60);
         self
     }
@@ -106,6 +108,12 @@ impl AiSettings {
 
     pub fn first_model(&self) -> Option<String> {
         self.active_models().into_iter().next()
+    }
+
+    pub fn apply_trained_context(&mut self, n_ctx_train: Option<u32>) {
+        if let Some(n) = local_ctx_len_for_model(n_ctx_train) {
+            self.local_ctx_len = n;
+        }
     }
 }
 
@@ -144,5 +152,22 @@ mod tests {
         s.local_model_id = Some("  ".into());
         s = s.normalize();
         assert!(s.local_model_id.is_none());
+    }
+
+    #[test]
+    fn trained_context_uses_model_max() {
+        assert_eq!(local_ctx_len_for_model(Some(32_768)), Some(32_768));
+        assert_eq!(local_ctx_len_for_model(Some(8)), Some(8));
+        assert_eq!(local_ctx_len_for_model(Some(262_144)), Some(262_144));
+        assert_eq!(local_ctx_len_for_model(Some(1_000_000)), Some(1_000_000));
+        assert_eq!(local_ctx_len_for_model(None), None);
+        assert_eq!(local_ctx_len_for_model(Some(0)), None);
+
+        let mut s = AiSettings::default();
+        s.apply_trained_context(Some(262_144));
+        s = s.normalize();
+        assert_eq!(s.local_ctx_len, 262_144);
+        s.apply_trained_context(None);
+        assert_eq!(s.local_ctx_len, 262_144);
     }
 }

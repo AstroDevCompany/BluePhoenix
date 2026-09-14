@@ -181,7 +181,6 @@ export function LocalModelsSection({
           className="input"
           type="number"
           min={512}
-          max={131072}
           value={status.localCtxLen}
           onChange={(e) => onStatus({ ...status, localCtxLen: Number(e.target.value) || 512 })}
           onBlur={() => void save({ localCtxLen: status.localCtxLen })}

@@ -169,8 +169,16 @@ pub fn ai_status(state: State<AppState>) -> AppResult<AiStatusDto> {
 }
 
 #[tauri::command]
-pub fn ai_save_settings(state: State<AppState>, settings: AiSettings) -> AppResult<AiSettings> {
+pub fn ai_save_settings(state: State<AppState>, mut settings: AiSettings) -> AppResult<AiSettings> {
     let before = state.db.with(|c| Ok(ai_store::load_ai_settings(c)))?;
+    if before.local_model_id != settings.local_model_id {
+        if let Some(id) = settings.local_model_id.as_deref() {
+            if let Some(model) = state.db.with(|c| ai_store::get_local_model(c, id))? {
+                settings
+                    .apply_trained_context(model.n_ctx_train.and_then(|n| u32::try_from(n).ok()));
+            }
+        }
+    }
     let saved = state
         .db
         .with(|c| ai_store::save_ai_settings(c, &settings))?;
@@ -357,11 +365,20 @@ pub async fn local_model_import(
         )
     })?;
     let mut settings = state.db.with(|c| Ok(ai_store::load_ai_settings(c)))?;
+    let before = settings.clone();
     if settings.local_model_id.is_none() {
         settings.local_model_id = Some(inserted.id);
-        state
+    }
+    settings.apply_trained_context(info.n_ctx_train);
+    if settings != before {
+        let saved = state
             .db
             .with(|c| ai_store::save_ai_settings(c, &settings))?;
+        if before.local_model_id != saved.local_model_id
+            || before.local_ctx_len != saved.local_ctx_len
+        {
+            state.local_llm.unload();
+        }
     }
     read_ai_status(&state)
 }
