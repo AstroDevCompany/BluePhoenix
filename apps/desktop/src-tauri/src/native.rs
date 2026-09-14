@@ -80,26 +80,31 @@ pub fn reveal_path(path: &Path) -> AppResult<()> {
     }
 }
 
-pub fn open_vscode(configured: &str, folder: &Path) -> AppResult<()> {
+pub fn open_vscode(_configured: &str, folder: &Path) -> AppResult<()> {
     if !folder.exists() {
         return Err(AppError::FolderMissing);
     }
-    let candidates: Vec<String> = if !configured.trim().is_empty() {
-        vec![configured.trim().to_string()]
-    } else {
-        vec![
-            "code".into(),
-            "code.cmd".into(),
-            "code.exe".into(),
-            #[cfg(target_os = "macos")]
+    let mut candidates = vec![
+        "code".to_string(),
+        "code.cmd".to_string(),
+        "code.exe".to_string(),
+    ];
+    #[cfg(target_os = "macos")]
+    {
+        candidates.push(
             "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code".into(),
-            #[cfg(target_os = "windows")]
-            format!(
-                "{}\\Microsoft VS Code\\bin\\code.cmd",
-                std::env::var("LOCALAPPDATA").unwrap_or_default()
-            ),
-        ]
-    };
+        );
+    }
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(local) = std::env::var("LOCALAPPDATA") {
+            candidates.push(format!("{local}\\Microsoft VS Code\\bin\\code.cmd"));
+        }
+        if let Ok(program_files) = std::env::var("ProgramFiles") {
+            candidates.push(format!("{program_files}\\Microsoft VS Code\\bin\\code.cmd"));
+        }
+        candidates.push("C:\\Program Files\\Microsoft VS Code\\bin\\code.cmd".into());
+    }
     for bin in candidates {
         if Command::new(&bin).arg(folder.as_os_str()).spawn().is_ok() {
             return Ok(());
@@ -108,25 +113,21 @@ pub fn open_vscode(configured: &str, folder: &Path) -> AppResult<()> {
     Err(AppError::VsCodeNotFound)
 }
 
-pub fn open_terminal(preference: &str, folder: &Path) -> AppResult<()> {
+pub fn open_terminal(folder: &Path) -> AppResult<()> {
     if !folder.exists() {
         return Err(AppError::FolderMissing);
     }
     #[cfg(target_os = "windows")]
     {
-        let pref = preference.trim().to_lowercase();
-        if pref == "cmd" {
-            Command::new("cmd")
-                .args(["/K", &format!("cd /d {}", folder.display())])
-                .spawn()?;
+        let dir = folder.to_string_lossy();
+        if Command::new("wt").args(["-d", dir.as_ref()]).spawn().is_ok() {
             return Ok(());
         }
-        if Command::new("wt")
-            .args(["-d", &folder.to_string_lossy()])
-            .spawn()
-            .is_ok()
-        {
-            return Ok(());
+        if let Ok(local) = std::env::var("LOCALAPPDATA") {
+            let wt = format!("{local}\\Microsoft\\WindowsApps\\wt.exe");
+            if Command::new(&wt).args(["-d", dir.as_ref()]).spawn().is_ok() {
+                return Ok(());
+            }
         }
         Command::new("cmd")
             .args(["/K", &format!("cd /d {}", folder.display())])
@@ -135,17 +136,18 @@ pub fn open_terminal(preference: &str, folder: &Path) -> AppResult<()> {
     }
     #[cfg(target_os = "macos")]
     {
-        let _ = preference;
+        let escaped = folder
+            .to_string_lossy()
+            .replace('\\', "\\\\")
+            .replace('"', "\\\"");
         let script = format!(
-            "tell application \"Terminal\" to do script \"cd {}\"",
-            folder.display()
+            "tell application \"Terminal\" to do script \"cd \" & quoted form of \"{escaped}\""
         );
         Command::new("osascript").args(["-e", &script]).spawn()?;
         Ok(())
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
-        let _ = preference;
         Command::new("x-terminal-emulator")
             .current_dir(folder)
             .spawn()

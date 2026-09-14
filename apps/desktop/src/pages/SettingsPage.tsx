@@ -7,7 +7,7 @@ import { useUi } from "../stores/ui";
 import type { Bootstrap } from "../lib/types";
 import { applyAccent } from "../lib/theme";
 
-const TABS = ["appearance", "workspace", "updates", "developer", "account", "data", "ai"] as const;
+const TABS = ["appearance", "workspace", "updates", "account", "data", "ai"] as const;
 
 export function SettingsPage({
   bootstrap,
@@ -93,23 +93,6 @@ export function SettingsPage({
       ) : null}
       {current === "updates" ? (
         <Updates settings={settings} onSave={save} />
-      ) : null}
-      {current === "developer" ? (
-        <section className="glass-panel settings-card">
-          <label className="field"><span className="label">Git executable</span><input className="input" value={settings.gitPath} onChange={(e) => setSettings({ ...settings, gitPath: e.target.value })} onBlur={() => void save(settings)} /></label>
-          <label className="field"><span className="label">VS Code executable</span><input className="input" value={settings.vscodePath} onChange={(e) => setSettings({ ...settings, vscodePath: e.target.value })} onBlur={() => void save(settings)} /></label>
-          <label className="field"><span className="label">Terminal</span>
-            <Select
-              value={settings.terminal}
-              onChange={(terminal) => void save({ ...settings, terminal })}
-              options={[
-                { value: "default", label: "Default" },
-                { value: "cmd", label: "Command Prompt" },
-                { value: "wt", label: "Windows Terminal" },
-              ]}
-            />
-          </label>
-        </section>
       ) : null}
       {current === "account" ? (
         <Account />

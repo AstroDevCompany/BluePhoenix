@@ -4,14 +4,39 @@ use std::path::Path;
 use std::process::Command;
 use std::time::Duration;
 
-fn git_bin(configured: &str) -> String {
-    if !configured.trim().is_empty() {
-        return configured.trim().to_string();
+fn git_bin(_configured: &str) -> String {
+    if let Ok(path) = which::which("git") {
+        return path.to_string_lossy().to_string();
     }
-    which::which("git")
-        .ok()
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|| "git".into())
+    for candidate in git_install_candidates() {
+        if Path::new(&candidate).is_file() {
+            return candidate;
+        }
+    }
+    "git".into()
+}
+
+fn git_install_candidates() -> Vec<String> {
+    let mut candidates = Vec::new();
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(program_files) = std::env::var("ProgramFiles") {
+            candidates.push(format!("{program_files}\\Git\\cmd\\git.exe"));
+            candidates.push(format!("{program_files}\\Git\\bin\\git.exe"));
+        }
+        candidates.push("C:\\Program Files\\Git\\cmd\\git.exe".into());
+        candidates.push("C:\\Program Files\\Git\\bin\\git.exe".into());
+        if let Ok(local) = std::env::var("LOCALAPPDATA") {
+            candidates.push(format!("{local}\\Programs\\Git\\cmd\\git.exe"));
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        candidates.push("/opt/homebrew/bin/git".into());
+        candidates.push("/usr/local/bin/git".into());
+        candidates.push("/usr/bin/git".into());
+    }
+    candidates
 }
 
 pub fn status(configured_git: &str, repo: &Path) -> GitStatusDto {
@@ -300,6 +325,12 @@ pub fn timeout() -> Duration {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn git_bin_ignores_configured_override() {
+        let resolved = git_bin(r"C:\definitely-not-git.exe");
+        assert_ne!(resolved, r"C:\definitely-not-git.exe");
+    }
 
     #[test]
     fn porcelain_clean_dirty_staged() {

@@ -482,9 +482,8 @@ pub fn open_vscode(state: State<AppState>, folder: String) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub fn open_terminal(state: State<AppState>, folder: String) -> AppResult<()> {
-    let pref = state.db.with(|c| Ok(db::load_settings(c).terminal))?;
-    crate::native::open_terminal(&pref, std::path::Path::new(&folder))
+pub fn open_terminal(folder: String) -> AppResult<()> {
+    crate::native::open_terminal(std::path::Path::new(&folder))
 }
 
 #[tauri::command]
