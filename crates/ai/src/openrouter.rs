@@ -1,6 +1,6 @@
 use crate::compat::{
     self, chat_completions_body, completion_text, paid_variant, provider_error_text,
-    split_message_text,
+    split_message_text, ThinkStream,
 };
 use crate::error::{AiError, AiFailureKind, AiResult};
 use crate::provider::{classify_http, AiProvider, CompletionRequest, CompletionResponse};
@@ -73,7 +73,7 @@ impl OpenRouterProvider {
         }
         let mut stream = res.bytes_stream();
         let mut buffer = String::new();
-        let mut assembled = String::new();
+        let mut think = ThinkStream::default();
         let mut reasoning = String::new();
         let mut used_model = model.clone();
         while let Some(chunk) = stream.next().await {
@@ -106,8 +106,10 @@ impl OpenRouterProvider {
                         reasoning.push_str(&hidden);
                     }
                     if !delta.is_empty() {
-                        assembled.push_str(&delta);
-                        on_delta(&delta);
+                        let visible = think.push(&delta);
+                        if !visible.is_empty() {
+                            on_delta(&visible);
+                        }
                     }
                     if done {
                         break;
@@ -115,10 +117,13 @@ impl OpenRouterProvider {
                 }
             }
         }
+        let leftover = think.flush();
+        if !leftover.is_empty() {
+            on_delta(&leftover);
+        }
+        let mut assembled = think.finish();
         if assembled.trim().is_empty() {
             assembled = compat::strip_thinking_wrappers(&reasoning);
-        } else {
-            assembled = compat::strip_thinking_wrappers(&assembled);
         }
         if assembled.is_empty() {
             return Err(AiError::provider(

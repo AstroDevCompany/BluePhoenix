@@ -318,29 +318,183 @@ fn push_join(buf: &mut String, piece: &str) {
 }
 
 pub fn strip_thinking_wrappers(text: &str) -> String {
-    let mut out = text.trim().to_string();
-    if let Some(start) = out.find("<think>") {
-        if let Some(rel) = out[start..].find("</think>") {
-            let end = start + rel + "</think>".len();
-            out = format!("{}{}", &out[..start], &out[end..]);
-            out = out.trim().to_string();
+    tidy_visible(&strip_thinking_blocks(text))
+}
+
+fn strip_thinking_blocks(text: &str) -> String {
+    let mut out = text.to_string();
+    loop {
+        let next = strip_channel_thought(&strip_xml_blocks(
+            &strip_xml_blocks(&out, "think"),
+            "thinking",
+        ));
+        if next == out {
+            return next;
+        }
+        out = next;
+    }
+}
+
+fn strip_xml_blocks(input: &str, tag: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut rest = input;
+    while let Some((start, open_end)) = find_open_tag(rest, tag) {
+        out.push_str(&rest[..start]);
+        let close = format!("</{tag}>");
+        if let Some(rel) = find_ci(&rest[open_end..], &close) {
+            rest = &rest[open_end + rel + close.len()..];
+        } else {
+            return out;
         }
     }
-    if let Some(start) = out.find("<|channel>thought") {
-        let close = out[start..]
-            .find("<channel|>")
-            .map(|i| (start + i, "<channel|>".len()))
-            .or_else(|| {
-                out[start..]
-                    .find("<|channel|>")
-                    .map(|i| (start + i, "<|channel|>".len()))
-            });
-        if let Some((at, len)) = close {
-            out = format!("{}{}", &out[..start], &out[at + len..]);
-            out = out.trim().to_string();
-        }
-    }
+    out.push_str(rest);
     out
+}
+
+fn find_open_tag(hay: &str, tag: &str) -> Option<(usize, usize)> {
+    let needle = format!("<{tag}");
+    let lower_hay = hay.to_ascii_lowercase();
+    let lower_needle = needle.to_ascii_lowercase();
+    let mut from = 0;
+    while from < lower_hay.len() {
+        let Some(rel) = lower_hay[from..].find(&lower_needle) else {
+            return None;
+        };
+        let start = from + rel;
+        let after = start + needle.len();
+        let next = hay[after..].chars().next();
+        if next.is_some_and(|c| c.is_ascii_alphanumeric() || c == '_') {
+            from = after;
+            continue;
+        }
+        return match hay[after..].find('>') {
+            Some(gt) => Some((start, after + gt + 1)),
+            None => Some((start, hay.len())),
+        };
+    }
+    None
+}
+
+fn find_ci(hay: &str, needle: &str) -> Option<usize> {
+    hay.to_ascii_lowercase().find(&needle.to_ascii_lowercase())
+}
+
+fn strip_channel_thought(text: &str) -> String {
+    const START: &str = "<|channel>thought";
+    let Some(start) = find_ci(text, START) else {
+        return text.to_string();
+    };
+    let after = start + START.len();
+    let close = find_ci(&text[after..], "<channel|>")
+        .map(|i| (after + i, "<channel|>".len()))
+        .or_else(|| {
+            find_ci(&text[after..], "<|channel|>").map(|i| (after + i, "<|channel|>".len()))
+        });
+    match close {
+        Some((at, len)) => format!("{}{}", &text[..start], &text[at + len..]),
+        None => text[..start].to_string(),
+    }
+}
+
+fn tidy_visible(text: &str) -> String {
+    let mut s = text.to_string();
+    while s.contains("\n\n\n") {
+        s = s.replace("\n\n\n", "\n\n");
+    }
+    s.trim().to_string()
+}
+
+/// Incremental filter so streamed tokens inside `<think>` never reach the UI.
+#[derive(Debug, Default)]
+pub struct ThinkStream {
+    raw: String,
+    emitted: usize,
+}
+
+impl ThinkStream {
+    pub fn push(&mut self, piece: &str) -> String {
+        if piece.is_empty() {
+            return String::new();
+        }
+        self.raw.push_str(piece);
+        let visible = strip_thinking_blocks(&self.raw);
+        self.emit_from(hold_incomplete_wrappers(&visible))
+    }
+
+    /// Emit any suffix held back as a possible think-tag prefix.
+    pub fn flush(&mut self) -> String {
+        let visible = strip_thinking_blocks(&self.raw);
+        self.emit_from(&visible)
+    }
+
+    pub fn finish(&self) -> String {
+        strip_thinking_wrappers(&self.raw)
+    }
+
+    fn emit_from(&mut self, visible: &str) -> String {
+        if visible.len() <= self.emitted {
+            return String::new();
+        }
+        if !visible.is_char_boundary(self.emitted) {
+            self.emitted = visible.len();
+            return String::new();
+        }
+        let delta = visible[self.emitted..].to_string();
+        self.emitted = visible.len();
+        delta
+    }
+}
+
+fn hold_incomplete_wrappers(s: &str) -> &str {
+    match trailing_incomplete_wrapper(s) {
+        Some(i) => &s[..i],
+        None => s,
+    }
+}
+
+fn trailing_incomplete_wrapper(s: &str) -> Option<usize> {
+    let i = s.rfind('<')?;
+    let lower = s.to_ascii_lowercase();
+    if !lower.is_char_boundary(i) {
+        return None;
+    }
+    let tail = &lower[i..];
+    if is_incomplete_wrapper_prefix(tail) {
+        Some(i)
+    } else {
+        None
+    }
+}
+
+fn is_incomplete_wrapper_prefix(tail: &str) -> bool {
+    const CHANNEL: &str = "<|channel>thought";
+    if CHANNEL.starts_with(tail) && tail != CHANNEL {
+        return true;
+    }
+    let Some(inner) = tail.strip_prefix('<') else {
+        return false;
+    };
+    let inner = inner.strip_prefix('/').unwrap_or(inner);
+    if inner.contains('>') {
+        return false;
+    }
+    if inner.is_empty() {
+        return true;
+    }
+    for tag in ["thinking", "think"] {
+        if tag.starts_with(inner) {
+            return true;
+        }
+        if inner.starts_with(tag) {
+            let rest = &inner[tag.len()..];
+            if rest.is_empty() {
+                return true;
+            }
+            let c = rest.chars().next().unwrap();
+            return !c.is_ascii_alphanumeric() && c != '_';
+        }
+    }
+    false
 }
 
 pub fn provider_error_text(body: &str) -> String {
@@ -559,6 +713,41 @@ mod tests {
             strip_thinking_wrappers("<think>plan</think>\n{\"a\":1}"),
             "{\"a\":1}"
         );
+        assert_eq!(
+            strip_thinking_wrappers("<think>one</think>hi<think>two</think>there"),
+            "hithere"
+        );
+        assert_eq!(
+            strip_thinking_wrappers("<THINK>secret</think>\nVisible"),
+            "Visible"
+        );
+        assert_eq!(
+            strip_thinking_wrappers("<thinking>nope</thinking>yes"),
+            "yes"
+        );
+        assert_eq!(strip_thinking_wrappers("<think>unclosed"), "");
+        assert_eq!(
+            strip_thinking_wrappers("keep\n<think>hide"),
+            "keep"
+        );
+        assert_eq!(
+            message_text(&json!({"content": "<think>secret</think>"})),
+            ""
+        );
+        let mut stream = ThinkStream::default();
+        assert_eq!(stream.push("<th"), "");
+        assert_eq!(stream.push("ink>hid"), "");
+        assert_eq!(stream.push("den</think>Hey"), "Hey");
+        assert_eq!(stream.finish(), "Hey");
+        let mut split_open = ThinkStream::default();
+        assert_eq!(split_open.push("Hi <"), "Hi ");
+        assert_eq!(split_open.push("th"), "");
+        assert_eq!(split_open.push("ink>no</think>Go"), "Go");
+        assert_eq!(split_open.finish(), "Hi Go");
+        let mut lt = ThinkStream::default();
+        assert_eq!(lt.push("1 <"), "1 ");
+        assert_eq!(lt.push(" 2"), "< 2");
+        assert_eq!(lt.finish(), "1 < 2");
     }
 
     #[test]

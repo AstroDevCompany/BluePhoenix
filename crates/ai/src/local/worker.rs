@@ -17,7 +17,7 @@ use llama_cpp_2::{send_logs_to_tracing, DecodeError, LogOptions};
 
 use super::grammar::JSON_GBNF;
 use super::{compiled_gpu_backend, set_state, EngineState, Inner, Job, LocalModelSpec};
-use crate::compat::strip_thinking_wrappers;
+use crate::compat::ThinkStream;
 use crate::error::{AiError, AiFailureKind, AiResult};
 use crate::provider::{ChatMessage, CompletionRequest, CompletionResponse};
 use crate::settings::MIN_LOCAL_CTX_LEN;
@@ -161,7 +161,6 @@ fn load_and_serve(
             }
         };
         let (first_request, first_delta, first_result) = first.take().expect("first job");
-        let mut last_tokens: Vec<LlamaToken> = Vec::new();
         let mut pending = Some((first_request, first_delta, first_result));
         while let Some((request, delta_tx, result_tx)) = pending.take() {
             set_state(
@@ -170,15 +169,7 @@ fn load_and_serve(
                     model_id: spec.id.clone(),
                 },
             );
-            let outcome = generate(
-                &model,
-                &mut ctx,
-                &mut last_tokens,
-                spec,
-                request,
-                &delta_tx,
-                &result_tx,
-            );
+            let outcome = generate(&model, &mut ctx, spec, request, &delta_tx, &result_tx);
             set_state(
                 inner,
                 EngineState::Ready {
@@ -356,7 +347,7 @@ fn decode_batch(ctx: &mut LlamaContext<'_>, batch: &mut LlamaBatch<'_>) -> AiRes
                 "llama.cpp ran out of context cache. Try a smaller context length.".to_string()
             }
             DecodeError::NTokensZero => {
-                "llama.cpp could not decode this batch. On Apple GPU this usually means the context window is too large for available memory — lower Context length in Settings → AI.".to_string()
+                "llama.cpp could not decode this batch. Try unloading the model in Settings → AI, or use a smaller context length.".to_string()
             }
             other => format!("llama.cpp decode failed: {other}"),
         };
@@ -374,7 +365,6 @@ fn needs_reload(current: &LocalModelSpec, next: &LocalModelSpec) -> bool {
 fn generate(
     model: &LlamaModel,
     ctx: &mut LlamaContext<'_>,
-    last_tokens: &mut Vec<LlamaToken>,
     spec: &LocalModelSpec,
     request: CompletionRequest,
     delta_tx: &tokio::sync::mpsc::UnboundedSender<String>,
@@ -404,24 +394,14 @@ fn generate(
         ));
     }
 
-    let prefix = common_prefix(last_tokens, &tokens);
-    if prefix == 0 {
-        ctx.clear_kv_cache();
-    } else {
-        let _ = ctx.clear_kv_cache_seq(Some(0), Some(prefix as u32), None);
-    }
-
-    let decode_from = if prefix == tokens.len() && prefix > 0 {
-        prefix - 1
-    } else {
-        prefix
-    };
-    let logits_idx = decode_tokens(ctx, &tokens, decode_from)?;
-    *last_tokens = tokens.clone();
+    // Always start from a clean cache. Prefix reuse leaves leftover generated
+    // tokens, and llama.cpp cannot partially trim KV on many Metal / SWA models.
+    ctx.clear_kv_cache();
+    let logits_idx = decode_tokens(ctx, &tokens, 0)?;
 
     let mut sampler = build_sampler(model, &request);
     let mut decoder = encoding_rs::UTF_8.new_decoder();
-    let mut assembled = String::new();
+    let mut think = ThinkStream::default();
     let mut n_cur = tokens.len() as i32;
     let max_new = request.max_tokens.max(1);
     let mut produced = 0u32;
@@ -441,8 +421,10 @@ fn generate(
             .token_to_piece(token, &mut decoder, false, None)
             .unwrap_or_default();
         if !piece.is_empty() {
-            assembled.push_str(&piece);
-            let _ = delta_tx.send(piece);
+            let visible = think.push(&piece);
+            if !visible.is_empty() {
+                let _ = delta_tx.send(visible);
+            }
         }
         gen_batch.clear();
         gen_batch.add(token, n_cur, &[0], true).map_err(|err| {
@@ -458,7 +440,11 @@ fn generate(
         produced += 1;
     }
 
-    let text = strip_thinking_wrappers(&assembled);
+    let leftover = think.flush();
+    if !leftover.is_empty() {
+        let _ = delta_tx.send(leftover);
+    }
+    let text = think.finish();
     if text.trim().is_empty() {
         return Err(AiError::provider(
             AiFailureKind::Malformed,
@@ -613,8 +599,4 @@ fn flatten_messages(messages: &[ChatMessage]) -> String {
     }
     out.push_str("assistant:");
     out
-}
-
-fn common_prefix(a: &[LlamaToken], b: &[LlamaToken]) -> usize {
-    a.iter().zip(b.iter()).take_while(|(l, r)| l == r).count()
 }

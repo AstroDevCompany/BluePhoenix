@@ -10,6 +10,14 @@ const COMPOSER_LINE = 21;
 const COMPOSER_PAD = 16;
 const COMPOSER_MAX_LINES = 4;
 
+function visibleAssistantText(text: string) {
+  return text
+    .replace(/<think\b[^>]*>[\s\S]*?(<\/think>|$)/gi, "")
+    .replace(/<thinking\b[^>]*>[\s\S]*?(<\/thinking>|$)/gi, "")
+    .replace(/<\/?think(?:ing)?\b[^>]*$/i, "")
+    .replace(/^\s+|\s+$/g, "");
+}
+
 function fitComposer(el: HTMLTextAreaElement | null) {
   if (!el) return;
   el.style.height = "0px";
@@ -112,6 +120,8 @@ export function AiChatPanel({ projectId }: { projectId?: string }) {
     return () => window.clearInterval(poll);
   }, [busy]);
 
+  const streamPreview = visibleAssistantText(streaming);
+
   const send = async () => {
     const text = draft.trim();
     if (!text || busy) return;
@@ -160,12 +170,12 @@ export function AiChatPanel({ projectId }: { projectId?: string }) {
         <div className="ai-rail-body" role="log" aria-live="polite">
           {messages.map((m) => (
             <div key={m.id} className={`ai-bubble ${m.role}`}>
-              {m.content}
+              {m.role === "assistant" ? visibleAssistantText(m.content) : m.content}
               {m.role === "assistant" && m.fallbackUsed ? <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>Served by fallback {m.model}</div> : null}
             </div>
           ))}
-          {busy && streaming ? <div className="ai-bubble assistant">{streaming}</div> : null}
-          {busy && !streaming ? <div className="ai-bubble assistant muted">{engineHint ?? "Thinking…"}</div> : null}
+          {busy && streamPreview ? <div className="ai-bubble assistant">{streamPreview}</div> : null}
+          {busy && !streamPreview ? <div className="ai-bubble assistant muted">{engineHint ?? "Thinking…"}</div> : null}
           {fallbackNote ? <p className="muted" style={{ fontSize: 12 }}>{fallbackNote}</p> : null}
           <div ref={end} />
         </div>
