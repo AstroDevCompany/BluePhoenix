@@ -1,4 +1,6 @@
+use std::ffi::CString;
 use std::num::NonZeroU32;
+use std::pin::pin;
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::Arc;
 use std::time::Duration;
@@ -14,7 +16,7 @@ use llama_cpp_2::token::LlamaToken;
 use llama_cpp_2::{send_logs_to_tracing, LogOptions};
 
 use super::grammar::JSON_GBNF;
-use super::{set_state, EngineState, Inner, Job, LocalModelSpec};
+use super::{compiled_gpu_backend, set_state, EngineState, Inner, Job, LocalModelSpec};
 use crate::compat::strip_thinking_wrappers;
 use crate::error::{AiError, AiFailureKind, AiResult};
 use crate::provider::{ChatMessage, CompletionRequest, CompletionResponse};
@@ -138,29 +140,136 @@ fn load_and_serve(
     first_delta: tokio::sync::mpsc::UnboundedSender<String>,
     first_result: tokio::sync::oneshot::Sender<AiResult<CompletionResponse>>,
 ) -> SessionEnd {
-    let model_params = LlamaModelParams::default()
-        .with_n_gpu_layers(spec.gpu_layers)
-        .with_use_mlock(false)
-        .with_use_mmap(true);
-    let model = match LlamaModel::load_from_file(backend, &spec.path, &model_params) {
-        Ok(model) => model,
-        Err(err) => {
-            let message = format!("Could not load GGUF model: {err}");
+    let try_gpu = spec.gpu_layers > 0 && compiled_gpu_backend() != "none";
+    let attempts: &[bool] = if try_gpu { &[true, false] } else { &[false] };
+    let mut last_error = None;
+    let mut first = Some((first_request, first_delta, first_result));
+    for &use_gpu in attempts {
+        let model = match load_model(backend, spec, use_gpu) {
+            Ok(model) => model,
+            Err(err) => {
+                last_error = Some(err);
+                continue;
+            }
+        };
+        let ctx_params = context_params(&model, spec);
+        let mut ctx = match model.new_context(backend, ctx_params) {
+            Ok(ctx) => ctx,
+            Err(err) => {
+                last_error = Some(format!("Could not create llama.cpp context: {err}"));
+                continue;
+            }
+        };
+        let (first_request, first_delta, first_result) = first.take().expect("first job");
+        let mut last_tokens: Vec<LlamaToken> = Vec::new();
+        let mut pending = Some((first_request, first_delta, first_result));
+        while let Some((request, delta_tx, result_tx)) = pending.take() {
             set_state(
                 inner,
-                EngineState::Error {
-                    message: message.clone(),
+                EngineState::Busy {
+                    model_id: spec.id.clone(),
                 },
             );
-            let _ = first_result.send(Err(AiError::provider(
-                AiFailureKind::Unavailable,
-                message,
-                Some(spec.name.clone()),
-            )));
-            return SessionEnd::Done;
+            let outcome = generate(
+                &model,
+                &mut ctx,
+                &mut last_tokens,
+                spec,
+                request,
+                &delta_tx,
+                &result_tx,
+            );
+            set_state(
+                inner,
+                EngineState::Ready {
+                    model_id: spec.id.clone(),
+                },
+            );
+            let _ = result_tx.send(outcome);
+            match recv_job(rx, inner, false) {
+                Recv::Disconnected => return SessionEnd::Done,
+                Recv::Timeout | Recv::Job(Job::Unload) => {
+                    set_state(inner, EngineState::Unloaded);
+                    return SessionEnd::Done;
+                }
+                Recv::Job(Job::Complete {
+                    spec: next,
+                    request,
+                    delta_tx,
+                    result_tx,
+                }) => {
+                    if needs_reload(spec, &next) {
+                        return SessionEnd::Reload {
+                            spec: next,
+                            request,
+                            delta_tx,
+                            result_tx,
+                        };
+                    }
+                    pending = Some((request, delta_tx, result_tx));
+                }
+            }
         }
-    };
+        return SessionEnd::Done;
+    }
+    let message = last_error.unwrap_or_else(|| "Could not load GGUF model".into());
+    set_state(
+        inner,
+        EngineState::Error {
+            message: message.clone(),
+        },
+    );
+    if let Some((_, _, first_result)) = first.take() {
+        let _ = first_result.send(Err(AiError::provider(
+            AiFailureKind::Unavailable,
+            message,
+            Some(spec.name.clone()),
+        )));
+    }
+    SessionEnd::Done
+}
 
+fn load_model(
+    backend: &LlamaBackend,
+    spec: &LocalModelSpec,
+    use_gpu: bool,
+) -> Result<LlamaModel, String> {
+    if use_gpu {
+        return load_model_gpu(backend, spec);
+    }
+    let params = LlamaModelParams::default()
+        .with_n_gpu_layers(0)
+        .with_use_mlock(false)
+        .with_use_mmap(true);
+    LlamaModel::load_from_file(backend, &spec.path, &params)
+        .map_err(|err| format!("Could not load GGUF model: {err}"))
+}
+
+fn load_model_gpu(backend: &LlamaBackend, spec: &LocalModelSpec) -> Result<LlamaModel, String> {
+    let path = CString::new(spec.path.as_str()).map_err(|_| "Invalid model path".to_string())?;
+    let n_ctx = NonZeroU32::new(spec.ctx_len.max(1)).unwrap_or(NonZeroU32::MIN);
+    let threads = spec.threads.max(1) as i32;
+    let mut ctx_params = LlamaContextParams::default()
+        .with_n_ctx(Some(n_ctx))
+        .with_n_threads(threads)
+        .with_n_threads_batch(threads);
+    let mut params = pin!(LlamaModelParams::default());
+    let mut margins = vec![0usize; llama_cpp_2::max_devices()];
+    params
+        .as_mut()
+        .fit_params(
+            &path,
+            &mut ctx_params,
+            &mut margins,
+            spec.ctx_len.max(1),
+            llama_cpp_sys_2::GGML_LOG_LEVEL_INFO,
+        )
+        .map_err(|err| format!("Could not fit model to GPU memory: {err}"))?;
+    LlamaModel::load_from_file(backend, &spec.path, &*params)
+        .map_err(|err| format!("Could not load GGUF model: {err}"))
+}
+
+fn context_params(model: &LlamaModel, spec: &LocalModelSpec) -> LlamaContextParams {
     let train = model.n_ctx_train();
     let n_ctx = if train == 0 {
         spec.ctx_len.max(1)
@@ -169,79 +278,10 @@ fn load_and_serve(
     };
     let n_ctx = NonZeroU32::new(n_ctx).unwrap_or(NonZeroU32::MIN);
     let threads = spec.threads.max(1) as i32;
-    let ctx_params = LlamaContextParams::default()
+    LlamaContextParams::default()
         .with_n_ctx(Some(n_ctx))
         .with_n_threads(threads)
-        .with_n_threads_batch(threads);
-    let mut ctx = match model.new_context(backend, ctx_params) {
-        Ok(ctx) => ctx,
-        Err(err) => {
-            let message = format!("Could not create llama.cpp context: {err}");
-            set_state(
-                inner,
-                EngineState::Error {
-                    message: message.clone(),
-                },
-            );
-            let _ = first_result.send(Err(AiError::provider(
-                AiFailureKind::Unavailable,
-                message,
-                Some(spec.name.clone()),
-            )));
-            return SessionEnd::Done;
-        }
-    };
-
-    let mut last_tokens: Vec<LlamaToken> = Vec::new();
-    let mut pending = Some((first_request, first_delta, first_result));
-    while let Some((request, delta_tx, result_tx)) = pending.take() {
-        set_state(
-            inner,
-            EngineState::Busy {
-                model_id: spec.id.clone(),
-            },
-        );
-        let outcome = generate(
-            &model,
-            &mut ctx,
-            &mut last_tokens,
-            spec,
-            request,
-            &delta_tx,
-            &result_tx,
-        );
-        set_state(
-            inner,
-            EngineState::Ready {
-                model_id: spec.id.clone(),
-            },
-        );
-        let _ = result_tx.send(outcome);
-        match recv_job(rx, inner, false) {
-            Recv::Disconnected => return SessionEnd::Done,
-            Recv::Timeout | Recv::Job(Job::Unload) => {
-                set_state(inner, EngineState::Unloaded);
-                return SessionEnd::Done;
-            }
-            Recv::Job(Job::Complete {
-                spec: next,
-                request,
-                delta_tx,
-                result_tx,
-            }) => {
-                if needs_reload(spec, &next) {
-                    return SessionEnd::Reload {
-                        spec: next,
-                        request,
-                        delta_tx,
-                        result_tx,
-                    };
-                }
-                pending = Some((request, delta_tx, result_tx));
-            }
-        }
-    }
-    SessionEnd::Done
+        .with_n_threads_batch(threads)
 }
 
 fn needs_reload(current: &LocalModelSpec, next: &LocalModelSpec) -> bool {

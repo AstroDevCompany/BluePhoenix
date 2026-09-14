@@ -162,13 +162,20 @@ export function AiSettingsPanel() {
       )}
       <button className="btn" type="button" disabled={testing} onClick={async () => {
         setTesting(true);
+        const tick = () => {
+          void api.aiStatus().then(setStatus).catch(() => undefined);
+        };
+        tick();
+        const poll = window.setInterval(tick, 500);
         try {
           const r = await api.aiTestConnection();
           toast(r.fallbackUsed ? `Connected via fallback (${r.model})` : `Connected (${r.model})`);
           reload();
         } catch (e) {
           toast(formatError(e), "error");
+          reload();
         } finally {
+          window.clearInterval(poll);
           setTesting(false);
         }
       }}>{testing ? "Testing…" : "Test connection"}</button>

@@ -6,7 +6,9 @@ license.workspace = true
 
 [features]
 default = []
-local-llm = ["dep:llama-cpp-2", "dep:encoding_rs"]
+local-llm = ["dep:llama-cpp-2", "dep:llama-cpp-sys-2", "dep:encoding_rs"]
+cuda = ["local-llm", "llama-cpp-2/cuda", "llama-cpp-2/cuda-no-vmm"]
+metal = ["local-llm", "llama-cpp-2/metal"]
 
 [dependencies]
 bluephoenix-domain.workspace = true
@@ -23,4 +25,5 @@ quick-xml = "0.37"
 scraper = "0.23"
 pulldown-cmark = { version = "0.13", default-features = false }
 llama-cpp-2 = { version = "0.1", default-features = false, features = ["common"], optional = true }
+llama-cpp-sys-2 = { version = "0.1", default-features = false, optional = true }
 encoding_rs = { version = "0.8", optional = true }

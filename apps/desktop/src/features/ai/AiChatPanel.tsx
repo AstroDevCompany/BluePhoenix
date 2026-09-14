@@ -26,6 +26,7 @@ export function AiChatPanel({ projectId }: { projectId?: string }) {
   const [streaming, setStreaming] = useState("");
   const [busy, setBusy] = useState(false);
   const [fallbackNote, setFallbackNote] = useState<string | null>(null);
+  const [engineHint, setEngineHint] = useState<string | null>(null);
   const live = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const end = useRef<HTMLDivElement>(null);
@@ -86,6 +87,31 @@ export function AiChatPanel({ projectId }: { projectId?: string }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
+  useEffect(() => {
+    if (!busy) {
+      setEngineHint(null);
+      return;
+    }
+    const tick = () => {
+      void api.aiStatus().then((status) => {
+        if (status.provider !== "local") {
+          setEngineHint(null);
+          return;
+        }
+        if (status.localEngine.state === "loading") {
+          setEngineHint("Loading model…");
+        } else if (status.localEngine.state === "error") {
+          setEngineHint(status.localEngine.error || "Local model error");
+        } else {
+          setEngineHint(null);
+        }
+      }).catch(() => undefined);
+    };
+    tick();
+    const poll = window.setInterval(tick, 500);
+    return () => window.clearInterval(poll);
+  }, [busy]);
+
   const send = async () => {
     const text = draft.trim();
     if (!text || busy) return;
@@ -139,7 +165,7 @@ export function AiChatPanel({ projectId }: { projectId?: string }) {
             </div>
           ))}
           {busy && streaming ? <div className="ai-bubble assistant">{streaming}</div> : null}
-          {busy && !streaming ? <div className="ai-bubble assistant muted">Thinking…</div> : null}
+          {busy && !streaming ? <div className="ai-bubble assistant muted">{engineHint ?? "Thinking…"}</div> : null}
           {fallbackNote ? <p className="muted" style={{ fontSize: 12 }}>{fallbackNote}</p> : null}
           <div ref={end} />
         </div>

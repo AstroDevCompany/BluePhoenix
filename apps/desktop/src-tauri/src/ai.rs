@@ -6,7 +6,8 @@ use crate::native;
 use crate::secrets;
 use crate::state::AppState;
 use bluephoenix_ai::local::{
-    default_thread_count, inspect_gguf, LocalEngine, LocalLlamaProvider, LocalModelSpec,
+    compiled_gpu_backend, default_thread_count, inspect_gguf, LocalEngine, LocalLlamaProvider,
+    LocalModelSpec,
 };
 use bluephoenix_ai::prompts;
 use bluephoenix_ai::settings::{AiProviderKind, AiSettings};
@@ -55,7 +56,11 @@ fn load_ready(state: &AppState) -> AppResult<(Box<dyn AiProvider>, AiSettings, V
                 name: model.name.clone(),
                 path: model.path,
                 ctx_len: settings.local_ctx_len,
-                gpu_layers: if settings.local_gpu_offload { 1000 } else { 0 },
+                gpu_layers: if settings.local_gpu_offload && compiled_gpu_backend() != "none" {
+                    1
+                } else {
+                    0
+                },
                 threads: default_thread_count(),
             };
             let display = spec.name.clone();

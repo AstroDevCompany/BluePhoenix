@@ -193,7 +193,7 @@ export function LocalModelsSection({
           checked={status.localGpuOffload}
           onChange={(e) => void save({ localGpuOffload: e.target.checked })}
         />
-        Offload layers to GPU when available
+        Offload layers to GPU (remainder on CPU)
       </label>
       <label className="field">
         <span className="label">Unload after idle minutes (0 = keep loaded)</span>

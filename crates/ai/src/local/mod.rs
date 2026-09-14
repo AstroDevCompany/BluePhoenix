@@ -13,6 +13,16 @@ use crate::provider::{CompletionRequest, CompletionResponse};
 pub use gguf::{inspect_gguf, GgufInfo};
 pub use provider::LocalLlamaProvider;
 
+pub fn compiled_gpu_backend() -> &'static str {
+    if cfg!(feature = "cuda") {
+        "cuda"
+    } else if cfg!(feature = "metal") {
+        "metal"
+    } else {
+        "none"
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocalModelSpec {
     pub id: String,
@@ -198,4 +208,17 @@ fn lock_state(inner: &Inner) -> std::sync::MutexGuard<'_, EngineState> {
 
 pub(crate) fn set_state(inner: &Inner, state: EngineState) {
     *lock_state(inner) = state;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn compiled_gpu_backend_is_known() {
+        assert!(matches!(
+            compiled_gpu_backend(),
+            "cuda" | "metal" | "none"
+        ));
+    }
 }
