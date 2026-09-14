@@ -6,6 +6,7 @@ mod worker;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
+use std::thread::JoinHandle;
 
 use crate::error::{AiError, AiFailureKind, AiResult};
 use crate::provider::{CompletionRequest, CompletionResponse};
@@ -82,6 +83,7 @@ pub(crate) enum Job {
 
 pub(crate) struct Inner {
     tx: Mutex<Option<Sender<Job>>>,
+    thread: Mutex<Option<JoinHandle<()>>>,
     state: Mutex<EngineState>,
     idle_minutes: AtomicU32,
 }
@@ -102,6 +104,7 @@ impl LocalEngine {
         Self {
             inner: Arc::new(Inner {
                 tx: Mutex::new(None),
+                thread: Mutex::new(None),
                 state: Mutex::new(EngineState::Unloaded),
                 idle_minutes: AtomicU32::new(0),
             }),
@@ -124,6 +127,15 @@ impl LocalEngine {
         if let Some(tx) = lock_tx(&self.inner).clone() {
             let _ = tx.send(Job::Unload);
         }
+    }
+
+    /// Stop the llama.cpp thread so Metal/CUDA backends are freed before process exit.
+    pub fn shutdown(&self) {
+        drop(lock_tx(&self.inner).take());
+        if let Some(handle) = lock_thread(&self.inner).take() {
+            let _ = handle.join();
+        }
+        set_state(&self.inner, EngineState::Unloaded);
     }
 
     pub async fn submit(
@@ -181,12 +193,13 @@ impl LocalEngine {
         }
         let (tx, rx) = std::sync::mpsc::channel();
         let inner = Arc::clone(&self.inner);
-        std::thread::Builder::new()
+        let handle = std::thread::Builder::new()
             .name("bluephoenix-llama".into())
             .spawn(move || worker::run(rx, inner))
             .map_err(|err| {
                 AiError::Message(format!("Could not start local model thread: {err}"))
             })?;
+        *lock_thread(&self.inner) = Some(handle);
         *slot = Some(tx);
         Ok(())
     }
@@ -200,6 +213,10 @@ pub fn default_thread_count() -> u32 {
 
 fn lock_tx(inner: &Inner) -> std::sync::MutexGuard<'_, Option<Sender<Job>>> {
     inner.tx.lock().unwrap_or_else(|err| err.into_inner())
+}
+
+fn lock_thread(inner: &Inner) -> std::sync::MutexGuard<'_, Option<JoinHandle<()>>> {
+    inner.thread.lock().unwrap_or_else(|err| err.into_inner())
 }
 
 fn lock_state(inner: &Inner) -> std::sync::MutexGuard<'_, EngineState> {

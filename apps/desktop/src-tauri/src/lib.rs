@@ -236,6 +236,16 @@ pub fn run() {
             commands::auth_forgot,
             commands::push_sync,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running BluePhoenix");
+        .build(tauri::generate_context!())
+        .expect("error while building BluePhoenix")
+        .run(|app, event| {
+            if matches!(
+                event,
+                tauri::RunEvent::Exit | tauri::RunEvent::ExitRequested { .. }
+            ) {
+                if let Some(state) = app.try_state::<AppState>() {
+                    state.local_llm.shutdown();
+                }
+            }
+        });
 }

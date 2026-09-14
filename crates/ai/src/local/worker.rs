@@ -13,13 +13,14 @@ use llama_cpp_2::model::params::LlamaModelParams;
 use llama_cpp_2::model::{AddBos, LlamaChatMessage, LlamaChatTemplate, LlamaModel};
 use llama_cpp_2::sampling::LlamaSampler;
 use llama_cpp_2::token::LlamaToken;
-use llama_cpp_2::{send_logs_to_tracing, LogOptions};
+use llama_cpp_2::{send_logs_to_tracing, DecodeError, LogOptions};
 
 use super::grammar::JSON_GBNF;
 use super::{compiled_gpu_backend, set_state, EngineState, Inner, Job, LocalModelSpec};
 use crate::compat::strip_thinking_wrappers;
 use crate::error::{AiError, AiFailureKind, AiResult};
 use crate::provider::{ChatMessage, CompletionRequest, CompletionResponse};
+use crate::settings::MIN_LOCAL_CTX_LEN;
 
 pub fn run(rx: Receiver<Job>, inner: Arc<Inner>) {
     send_logs_to_tracing(LogOptions::default());
@@ -152,11 +153,10 @@ fn load_and_serve(
                 continue;
             }
         };
-        let ctx_params = context_params(&model, spec);
-        let mut ctx = match model.new_context(backend, ctx_params) {
+        let mut ctx = match open_context(backend, &model, spec) {
             Ok(ctx) => ctx,
             Err(err) => {
-                last_error = Some(format!("Could not create llama.cpp context: {err}"));
+                last_error = Some(err);
                 continue;
             }
         };
@@ -247,21 +247,29 @@ fn load_model(
 
 fn load_model_gpu(backend: &LlamaBackend, spec: &LocalModelSpec) -> Result<LlamaModel, String> {
     let path = CString::new(spec.path.as_str()).map_err(|_| "Invalid model path".to_string())?;
-    let n_ctx = NonZeroU32::new(spec.ctx_len.max(1)).unwrap_or(NonZeroU32::MIN);
+    let probe = FIT_PROBE_CTX.min(spec.ctx_len.max(1)).max(1);
+    let probe = NonZeroU32::new(probe).unwrap_or(NonZeroU32::MIN);
     let threads = spec.threads.max(1) as i32;
+    let n_ubatch = PROMPT_UBATCH.min(probe.get()).max(1);
     let mut ctx_params = LlamaContextParams::default()
-        .with_n_ctx(Some(n_ctx))
+        .with_n_ctx(Some(probe))
+        .with_n_batch(n_ubatch)
+        .with_n_ubatch(n_ubatch)
         .with_n_threads(threads)
         .with_n_threads_batch(threads);
     let mut params = pin!(LlamaModelParams::default());
     let mut margins = vec![0usize; llama_cpp_2::max_devices()];
+    if compiled_gpu_backend() == "metal" {
+        // Unified memory is shared with the UI; leave headroom so decode doesn't fail.
+        margins.fill(1024 * 1024 * 1024);
+    }
     params
         .as_mut()
         .fit_params(
             &path,
             &mut ctx_params,
             &mut margins,
-            spec.ctx_len.max(1),
+            MIN_LOCAL_CTX_LEN,
             llama_cpp_sys_2::GGML_LOG_LEVEL_INFO,
         )
         .map_err(|err| format!("Could not fit model to GPU memory: {err}"))?;
@@ -269,19 +277,91 @@ fn load_model_gpu(backend: &LlamaBackend, spec: &LocalModelSpec) -> Result<Llama
         .map_err(|err| format!("Could not load GGUF model: {err}"))
 }
 
-fn context_params(model: &LlamaModel, spec: &LocalModelSpec) -> LlamaContextParams {
+const PROMPT_UBATCH: u32 = 512;
+const FIT_PROBE_CTX: u32 = 4096;
+
+fn desired_n_ctx(model: &LlamaModel, spec: &LocalModelSpec) -> u32 {
     let train = model.n_ctx_train();
-    let n_ctx = if train == 0 {
+    if train == 0 {
         spec.ctx_len.max(1)
     } else {
         spec.ctx_len.min(train).max(1)
-    };
+    }
+}
+
+fn context_params(model: &LlamaModel, spec: &LocalModelSpec, n_ctx: u32) -> LlamaContextParams {
+    let n_ctx = desired_n_ctx(model, spec).min(n_ctx).max(1);
     let n_ctx = NonZeroU32::new(n_ctx).unwrap_or(NonZeroU32::MIN);
+    let n_ubatch = PROMPT_UBATCH.min(n_ctx.get()).max(1);
+    let n_batch = 2048.min(n_ctx.get()).max(n_ubatch);
     let threads = spec.threads.max(1) as i32;
     LlamaContextParams::default()
         .with_n_ctx(Some(n_ctx))
+        .with_n_batch(n_batch)
+        .with_n_ubatch(n_ubatch)
+        .with_n_seq_max(1)
         .with_n_threads(threads)
         .with_n_threads_batch(threads)
+}
+
+fn open_context<'a>(
+    backend: &LlamaBackend,
+    model: &'a LlamaModel,
+    spec: &LocalModelSpec,
+) -> Result<LlamaContext<'a>, String> {
+    let mut n_ctx = desired_n_ctx(model, spec);
+    loop {
+        let params = context_params(model, spec, n_ctx);
+        let last = match model.new_context(backend, params) {
+            Ok(mut ctx) => {
+                if warmup_decode(model, &mut ctx).is_ok() {
+                    return Ok(ctx);
+                }
+                format!(
+                    "Could not run llama.cpp at context length {n_ctx}. Lower Context length in Settings → AI if this keeps failing."
+                )
+            }
+            Err(err) => format!("Could not create llama.cpp context ({n_ctx}): {err}"),
+        };
+        if n_ctx <= MIN_LOCAL_CTX_LEN {
+            return Err(last);
+        }
+        n_ctx = (n_ctx / 2).max(MIN_LOCAL_CTX_LEN);
+    }
+}
+
+fn warmup_decode(model: &LlamaModel, ctx: &mut LlamaContext<'_>) -> Result<(), ()> {
+    let token = model.token_bos();
+    if token.0 < 0 {
+        return Ok(());
+    }
+    let mut batch = LlamaBatch::new(1, 1);
+    batch.add(token, 0, &[0], true).map_err(|_| ())?;
+    decode_batch(ctx, &mut batch).map_err(|_| ())?;
+    ctx.clear_kv_cache();
+    Ok(())
+}
+
+fn decode_batch(ctx: &mut LlamaContext<'_>, batch: &mut LlamaBatch<'_>) -> AiResult<()> {
+    if batch.n_tokens() <= 0 {
+        return Err(AiError::provider(
+            AiFailureKind::Unavailable,
+            "llama.cpp decode failed: empty batch",
+            None,
+        ));
+    }
+    ctx.decode(batch).map_err(|err| {
+        let message = match err {
+            DecodeError::NoKvCacheSlot => {
+                "llama.cpp ran out of context cache. Try a smaller context length.".to_string()
+            }
+            DecodeError::NTokensZero => {
+                "llama.cpp could not decode this batch. On Apple GPU this usually means the context window is too large for available memory — lower Context length in Settings → AI.".to_string()
+            }
+            other => format!("llama.cpp decode failed: {other}"),
+        };
+        AiError::provider(AiFailureKind::Unavailable, message, None)
+    })
 }
 
 fn needs_reload(current: &LocalModelSpec, next: &LocalModelSpec) -> bool {
@@ -336,7 +416,7 @@ fn generate(
     } else {
         prefix
     };
-    let mut batch = decode_tokens(ctx, &tokens, decode_from)?;
+    let logits_idx = decode_tokens(ctx, &tokens, decode_from)?;
     *last_tokens = tokens.clone();
 
     let mut sampler = build_sampler(model, &request);
@@ -345,12 +425,14 @@ fn generate(
     let mut n_cur = tokens.len() as i32;
     let max_new = request.max_tokens.max(1);
     let mut produced = 0u32;
+    let mut gen_batch = LlamaBatch::new(1, 1);
+    let mut logits_idx = logits_idx.max(0);
 
     while produced < max_new && (n_cur as usize) < n_ctx {
         if result_tx.is_closed() || delta_tx.is_closed() {
             break;
         }
-        let token = sampler.sample(ctx, batch.n_tokens() - 1);
+        let token = sampler.sample(ctx, logits_idx);
         sampler.accept(token);
         if model.is_eog_token(token) {
             break;
@@ -362,21 +444,16 @@ fn generate(
             assembled.push_str(&piece);
             let _ = delta_tx.send(piece);
         }
-        batch.clear();
-        batch.add(token, n_cur, &[0], true).map_err(|err| {
+        gen_batch.clear();
+        gen_batch.add(token, n_cur, &[0], true).map_err(|err| {
             AiError::provider(
                 AiFailureKind::Unavailable,
                 format!("llama.cpp batch failed: {err}"),
                 Some(spec.name.clone()),
             )
         })?;
-        ctx.decode(&mut batch).map_err(|err| {
-            AiError::provider(
-                AiFailureKind::Unavailable,
-                format!("llama.cpp decode failed: {err}"),
-                Some(spec.name.clone()),
-            )
-        })?;
+        decode_batch(ctx, &mut gen_batch)?;
+        logits_idx = gen_batch.n_tokens().saturating_sub(1).max(0);
         n_cur += 1;
         produced += 1;
     }
@@ -400,11 +477,14 @@ fn decode_tokens(
     ctx: &mut LlamaContext<'_>,
     tokens: &[LlamaToken],
     start: usize,
-) -> AiResult<LlamaBatch<'static>> {
+) -> AiResult<i32> {
     let start = start.min(tokens.len().saturating_sub(1));
-    let cap = 512.min(tokens.len().saturating_sub(start).max(1));
+    let cap = (ctx.n_ubatch() as usize)
+        .max(1)
+        .min(tokens.len().saturating_sub(start).max(1));
     let mut batch = LlamaBatch::new(cap, 1);
     let mut i = start;
+    let mut last_logits = 0i32;
     while i < tokens.len() {
         batch.clear();
         let end = (i + cap).min(tokens.len());
@@ -419,16 +499,11 @@ fn decode_tokens(
                 )
             })?;
         }
-        ctx.decode(&mut batch).map_err(|err| {
-            AiError::provider(
-                AiFailureKind::Unavailable,
-                format!("llama.cpp decode failed: {err}"),
-                None,
-            )
-        })?;
+        last_logits = batch.n_tokens().saturating_sub(1);
+        decode_batch(ctx, &mut batch)?;
         i = end;
     }
-    Ok(batch)
+    Ok(last_logits)
 }
 
 fn build_sampler(model: &LlamaModel, request: &CompletionRequest) -> LlamaSampler {
