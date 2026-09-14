@@ -125,10 +125,20 @@ export function AiChatPanel({ projectId }: { projectId?: string }) {
   const send = async () => {
     const text = draft.trim();
     if (!text || busy) return;
+    const pendingId = crypto.randomUUID();
+    const pending: AiMessage = {
+      id: pendingId,
+      conversationId: conversationId ?? "",
+      role: "user",
+      content: text,
+      fallbackUsed: false,
+      createdAt: new Date().toISOString(),
+    };
     setDraft("");
     setBusy(true);
     setStreaming("");
     setFallbackNote(null);
+    setMessages((prev) => [...prev, pending]);
     try {
       const msg = await api.aiChatStream({ conversationId, projectId, message: text });
       setConversationId(msg.conversationId);
@@ -136,6 +146,17 @@ export function AiChatPanel({ projectId }: { projectId?: string }) {
       setStreaming("");
     } catch (e) {
       toast(formatError(e), "error");
+      setStreaming("");
+      if (conversationId) {
+        try {
+          setMessages(await api.aiListMessages(conversationId));
+        } catch {
+          setMessages((prev) => prev.filter((m) => m.id !== pendingId));
+        }
+      } else {
+        setMessages((prev) => prev.filter((m) => m.id !== pendingId));
+        setDraft(text);
+      }
     } finally {
       setBusy(false);
     }
