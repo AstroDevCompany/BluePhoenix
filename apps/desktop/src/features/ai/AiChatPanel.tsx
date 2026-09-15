@@ -5,6 +5,7 @@ import { api, formatError } from "../../lib/ipc";
 import { useUi } from "../../stores/ui";
 import { IconButton } from "../../components/ui/Tooltip";
 import type { AiMessage } from "../../lib/types";
+import { MarkdownMessage } from "./MarkdownMessage";
 
 const COMPOSER_LINE = 21;
 const COMPOSER_PAD = 16;
@@ -191,11 +192,11 @@ export function AiChatPanel({ projectId }: { projectId?: string }) {
         <div className="ai-rail-body" role="log" aria-live="polite">
           {messages.map((m) => (
             <div key={m.id} className={`ai-bubble ${m.role}`}>
-              {m.role === "assistant" ? visibleAssistantText(m.content) : m.content}
+              {m.role === "assistant" ? <MarkdownMessage text={visibleAssistantText(m.content)} /> : m.content}
               {m.role === "assistant" && m.fallbackUsed ? <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>Served by fallback {m.model}</div> : null}
             </div>
           ))}
-          {busy && streamPreview ? <div className="ai-bubble assistant">{streamPreview}</div> : null}
+          {busy && streamPreview ? <div className="ai-bubble assistant"><MarkdownMessage text={streamPreview} /></div> : null}
           {busy && !streamPreview ? <div className="ai-bubble assistant muted">{engineHint ?? "Thinking…"}</div> : null}
           {fallbackNote ? <p className="muted" style={{ fontSize: 12 }}>{fallbackNote}</p> : null}
           <div ref={end} />
