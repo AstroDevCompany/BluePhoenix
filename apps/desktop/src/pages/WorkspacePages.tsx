@@ -11,6 +11,8 @@ import { KindDashboard } from "../features/workspaces/registry";
 import { EmptyState } from "../components/ui/EmptyState";
 import { ErrorNote } from "../components/ui/ErrorNote";
 import { PageHeader } from "../components/PageHeader";
+import { ProjectsToolbar } from "../features/projects/ProjectsToolbar";
+import { applyView, useProjectView } from "../features/projects/projectView";
 import type { WorkspacePage } from "../components/router";
 import { useUi } from "../stores/ui";
 
@@ -63,9 +65,9 @@ function Overview({
       <PageHeader title={category.name} kicker={category.terminology.itemPlural} />
       {projects.isError ? <ErrorNote error={projects.error} onRetry={() => void projects.refetch()} /> : null}
       {projects.isPending ? <p className="muted">Loading…</p> : null}
-      {projects.isSuccess ? <KindDashboard category={category} projects={list} gpa={dash.data ?? null} /> : null}
+      {projects.isSuccess ? <KindDashboard category={category} projects={list} gpa={dash.data ?? null} onOpenProject={onOpen} /> : null}
       <div className="section">
-        <h2 className="h2">{category.terminology.itemPlural}</h2>
+        <h2 className="h2">{category.kind === "software" ? "Jump back in" : category.terminology.itemPlural}</h2>
         {!projects.isSuccess ? null : list.length === 0 ? (
           <EmptyState
             title={`No ${category.terminology.itemPlural.toLowerCase()} yet`}
@@ -74,7 +76,10 @@ function Overview({
           />
         ) : (
           <div className="grid-cards">
-            {list.map((p) => (
+            {(category.kind === "software"
+              ? applyView(list, { query: "", sort: "recent", filter: "all", layout: "grid" }).slice(0, 6)
+              : list
+            ).map((p) => (
               <ProjectCardView key={p.id} project={p} category={category} onOpen={() => onOpen(p.id)} onRefresh={refresh} />
             ))}
           </div>
@@ -95,7 +100,9 @@ function ItemsPage({
 }) {
   const projects = useProjects(category.id);
   const refresh = useProjectsRefresh();
+  const [view, updateView] = useProjectView(category.id);
   const list = projects.data ?? [];
+  const shown = applyView(list, view);
   return (
     <div>
       <PageHeader title={category.terminology.itemPlural} kicker={category.name} />
@@ -106,11 +113,22 @@ function ItemsPage({
       ) : list.length === 0 ? (
         <EmptyState title="Nothing here yet" body={`This list is only ${category.terminology.itemPlural.toLowerCase()} in ${category.name}.`} action={{ label: `New ${category.terminology.itemSingular}`, onClick: onCreate }} />
       ) : (
-        <div className="grid-cards">
-          {list.map((p) => (
-            <ProjectCardView key={p.id} project={p} category={category} onOpen={() => onOpen(p.id)} onRefresh={refresh} />
-          ))}
-        </div>
+        <>
+          <ProjectsToolbar projects={list} view={view} onChange={updateView} isSoftware={category.kind === "software"} />
+          {shown.length === 0 ? (
+            <EmptyState
+              title="No matches"
+              body="Nothing fits the current search and filter."
+              action={{ label: "Clear filters", onClick: () => updateView({ query: "", filter: "all" }) }}
+            />
+          ) : (
+            <div className={`grid-cards ${view.layout === "list" ? "is-list" : ""}`}>
+              {shown.map((p) => (
+                <ProjectCardView key={p.id} project={p} category={category} layout={view.layout} onOpen={() => onOpen(p.id)} onRefresh={refresh} />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

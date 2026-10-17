@@ -1,16 +1,12 @@
-import { Play } from "lucide-react";
 import type { Category } from "../../lib/types";
-import { api, formatError } from "../../lib/ipc";
 import { useProjects } from "../../lib/queries";
 import { ErrorNote } from "../../components/ui/ErrorNote";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { PageHeader } from "../../components/PageHeader";
-import { useUi } from "../../stores/ui";
+import { RunButton } from "../projects/ProjectActions";
 
 export function CommandsPage({ category }: { category: Category }) {
   const projectsQuery = useProjects(category.id);
-  const toast = useUi((s) => s.showToast);
-  const confirm = useUi((s) => s.askConfirm);
   const pinned = (projectsQuery.data ?? []).filter((p) => p.pinnedCommand);
   return (
     <div>
@@ -20,28 +16,15 @@ export function CommandsPage({ category }: { category: Category }) {
       ) : projectsQuery.isPending ? (
         <p className="muted">Loading…</p>
       ) : pinned.length === 0 ? (
-        <EmptyState title="No pinned commands" body="Pin a command on a software project to see it here." />
+        <EmptyState title="No pinned commands" body="Pin a command on a software project (Commands tab) to run it from here." />
       ) : (
         pinned.map((p) => {
           const cmd = p.pinnedCommand!;
-          const run = (confirmed?: boolean) =>
-            api.runCommand({ projectId: p.id, command: cmd.command, workingDirectory: p.localPath, confirmed })
-              .then(() => toast(`Ran ${cmd.name}`))
-              .catch((e) => toast(formatError(e), "error"));
           return (
             <div key={p.id} className="list-row">
               <span className="list-row-title">{cmd.name}</span>
-              <span className="list-row-meta">{p.name}</span>
-              <button
-                className="btn"
-                type="button"
-                onClick={() => {
-                  if (cmd.dangerous) confirm("Run dangerous command?", cmd.command, () => void run(true), true);
-                  else void run();
-                }}
-              >
-                <Play size={14} /> Run
-              </button>
+              <span className="list-row-meta">{p.name} · {cmd.command}</span>
+              <RunButton project={p} command={cmd} primary={false} />
             </div>
           );
         })

@@ -2,11 +2,10 @@ use crate::db;
 use crate::error::{AppError, AppResult};
 use crate::models::*;
 use crate::state::AppState;
-use bluephoenix_domain::commands_safety::{is_dangerous, split_command_line};
+use bluephoenix_domain::commands_safety::is_dangerous;
 use bluephoenix_domain::context::TodoFilter;
 use serde::Deserialize;
 use std::path::PathBuf;
-use std::process::Command;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_opener::OpenerExt;
 
@@ -541,42 +540,6 @@ pub fn delete_command(state: State<AppState>, id: String) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub fn run_command(
-    state: State<AppState>,
-    project_id: String,
-    command: String,
-    working_directory: Option<String>,
-    confirmed: Option<bool>,
-) -> AppResult<CommandOutputDto> {
-    if is_dangerous(&command) && confirmed != Some(true) {
-        return Err(AppError::NeedsConfirm);
-    }
-    let args = split_command_line(&command).map_err(AppError::msg)?;
-    let program = args[0].clone();
-    let rest = &args[1..];
-    let cwd = if let Some(dir) = working_directory {
-        PathBuf::from(dir)
-    } else {
-        state.db.with(|c| {
-            let (local, _) = db::project_binding(c, &state.db.device_id, &project_id);
-            Ok(local
-                .map(PathBuf::from)
-                .unwrap_or_else(|| PathBuf::from(".")))
-        })?
-    };
-    let output = Command::new(&program)
-        .args(rest)
-        .current_dir(&cwd)
-        .output()
-        .map_err(|e| AppError::msg(format!("Unable to run command: {e}")))?;
-    Ok(CommandOutputDto {
-        code: output.status.code().unwrap_or(-1),
-        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-    })
-}
-
-#[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub fn term_spawn(
     app: AppHandle,
@@ -589,8 +552,9 @@ pub fn term_spawn(
     confirmed: Option<bool>,
 ) -> AppResult<crate::terminal::TerminalSessionDto> {
     // Resolve everything from the DB first so the lock is released before spawning.
-    let (project_id, title, command, working_dir, env, root) = state.db.with(|c| {
+    let (project_id, command_id, title, command, working_dir, env, root) = state.db.with(|c| {
         let mut project_id = project_id;
+        let resolved_command_id = command_id.clone();
         let mut title = None;
         let mut command = command.filter(|c| !c.trim().is_empty());
         let mut working_dir = None;
@@ -628,7 +592,7 @@ pub fn term_spawn(
                 .map(PathBuf::from),
             None => None,
         };
-        Ok((project_id, title, command, working_dir, env, root))
+        Ok((project_id, resolved_command_id, title, command, working_dir, env, root))
     })?;
     if let Some(cmd) = &command {
         if is_dangerous(cmd) && confirmed != Some(true) {
@@ -645,6 +609,7 @@ pub fn term_spawn(
         crate::terminal::app_sink(&app),
         crate::terminal::SpawnRequest {
             project_id,
+            command_id,
             title,
             command,
             cwd,
@@ -962,6 +927,16 @@ pub fn delete_exam(state: State<AppState>, id: String) -> AppResult<()> {
 #[tauri::command]
 pub fn university_dashboard(state: State<AppState>) -> AppResult<GpaDashboardDto> {
     state.db.with(db::university_dashboard)
+}
+
+#[tauri::command]
+pub fn time_summary(
+    state: State<AppState>,
+    category_id: Option<String>,
+) -> AppResult<TimeSummaryDto> {
+    state
+        .db
+        .with(|c| db::time_summary(c, category_id.as_deref()))
 }
 
 #[tauri::command]

@@ -5,6 +5,7 @@ export type ShortcutId =
   | "settings"
   | "timer"
   | "editor"
+  | "terminal"
   | "shortcuts"
   | "back"
   | "workspace"
@@ -24,6 +25,7 @@ export const SHORTCUTS: Shortcut[] = [
   { id: "shortcuts", keys: "?", label: "Show keyboard shortcuts", group: "General" },
   { id: "timer", keys: "mod+shift+t", label: "Start / stop timer", group: "Project" },
   { id: "editor", keys: "mod+e", label: "Open project in editor", group: "Project" },
+  { id: "terminal", keys: "mod+j", label: "Toggle terminal panel", group: "Project" },
 ];
 
 export const isMac = typeof navigator !== "undefined" && /mac/i.test(navigator.userAgent);

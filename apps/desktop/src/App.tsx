@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { Bootstrap } from "./lib/types";
 import { api, formatError } from "./lib/ipc";
 import { AppRouter, router } from "./appRouter";
-import { ShellProvider } from "./pages/Shell";
+import { ShellProvider } from "./lib/shellContext";
 import { parsePath, pathFor } from "./components/router";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { useUi } from "./stores/ui";

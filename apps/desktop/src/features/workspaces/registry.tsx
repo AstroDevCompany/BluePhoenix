@@ -7,16 +7,18 @@ export function KindDashboard({
   category,
   projects,
   gpa,
+  onOpenProject,
 }: {
   category: Category;
   projects: ProjectCard[];
   gpa: GpaDashboard | null;
+  onOpenProject?: (id: string) => void;
 }) {
   if (category.kind === "university") {
     return gpa ? <UniversityDashboard dash={gpa} /> : null;
   }
   if (category.kind === "software") {
-    return <SoftwareDashboard category={category} projects={projects} />;
+    return <SoftwareDashboard category={category} projects={projects} onOpenProject={onOpenProject} />;
   }
   return (
     <div className="stat-grid">

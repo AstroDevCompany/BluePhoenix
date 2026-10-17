@@ -1,23 +1,31 @@
-import { useEffect, useRef, useState, type ReactNode, Children } from "react";
-import { ChevronDown } from "lucide-react";
-import type { Category, CommandOutput, GitStatus, ProjectCard, Todo } from "../../lib/types";
+import { useEffect, useState, type ReactNode } from "react";
+import { useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
+import * as Tabs from "@radix-ui/react-tabs";
+import { ArrowLeft, FolderOpen, Github, Globe } from "lucide-react";
+import type { Category, CommandDto, ProjectCard, Todo } from "../../lib/types";
 import { hasCap } from "../../lib/types";
 import { api, formatError } from "../../lib/ipc";
 import { formatDate, formatDuration, formatExamStatus, EXAM_STATUS_OPTIONS } from "../../lib/format";
 import { TrophyRow } from "../achievements/TrophyRow";
-import { useUi } from "../../stores/ui";
 import { TimerControls } from "../time/TimerControls";
 import { TimeEntries } from "../time/TimeEntries";
 import { TodoList } from "../todos/TodoList";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { Select } from "../../components/ui/Select";
-import { useOpenTransition } from "../../components/ui/useOpenTransition";
 import { SoftwareAiActions } from "../ai/SoftwareAiActions";
+import { IconButton } from "../../components/ui/Tooltip";
+import { keys, useProject } from "../../lib/queries";
+import { EditorButton, GitButton, RunButton, TerminalButton } from "./ProjectActions";
+import { GitSummary } from "./GitSummary";
+import { GitTab } from "./detail/GitTab";
+import { CommandsTab } from "./detail/CommandsTab";
 
 type DetailTab =
   | "overview"
   | "todos"
   | "time"
+  | "git"
   | "commands"
   | "versions"
   | "ai"
@@ -44,10 +52,11 @@ function tabsFor(category: Category): { id: DetailTab; label: string }[] {
   if (category.kind === "software") {
     return [
       { id: "overview", label: "Overview" },
+      ...(hasCap(category, "git") ? [{ id: "git" as const, label: "Git" }] : []),
+      ...(hasCap(category, "developmentCommands") ? [{ id: "commands" as const, label: "Commands" }] : []),
       ...(hasCap(category, "todos") ? [{ id: "todos" as const, label: "TODOs" }] : []),
       ...(hasCap(category, "timeTracking") ? [{ id: "time" as const, label: "Time" }] : []),
-      ...(hasCap(category, "developmentCommands") ? [{ id: "commands" as const, label: "Commands" }] : []),
-      ...(hasCap(category, "versions") ? [{ id: "versions" as const, label: "Versions" }] : []),
+      ...(hasCap(category, "versions") ? [{ id: "versions" as const, label: "Releases" }] : []),
       { id: "ai", label: "AI" },
       ...(hasCap(category, "files") ? [{ id: filesId, label: filesLabel }] : []),
     ];
@@ -61,7 +70,6 @@ function tabsFor(category: Category): { id: DetailTab; label: string }[] {
 }
 
 export function ProjectDetail({ category, projectId }: { category: Category; projectId: string }) {
-  const [project, setProject] = useState<ProjectCard | null>(null);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [links, setLinks] = useState<{ id: string; title: string; url: string }[]>([]);
   const [files, setFiles] = useState<{ id: string; displayName: string; absolutePath?: string; indexStatus?: string; indexStage?: string; indexLimitation?: string }[]>([]);
@@ -69,19 +77,21 @@ export function ProjectDetail({ category, projectId }: { category: Category; pro
   const [versions, setVersions] = useState<{ version: string; changelog: string; releasedAt?: string }[]>([]);
   const [topics, setTopics] = useState<{ id: string; title: string; status: string; trackedSeconds: number }[]>([]);
   const [exams, setExams] = useState<{ id: string; date?: string; grade?: number; status: string }[]>([]);
-  const [commands, setCommands] = useState<{ id: string; name: string; command: string; dangerous: boolean }[]>([]);
+  const [commands, setCommands] = useState<CommandDto[]>([]);
   const [lessons, setLessons] = useState<{ id: string; date: string; attended: boolean }[]>([]);
-  const [output, setOutput] = useState<CommandOutput | null>(null);
   const [topicId, setTopicId] = useState<string>("");
-  const [error, setError] = useState<string | null>(null);
   const tabs = tabsFor(category);
   const [tab, setTab] = useState<DetailTab>(tabs[0]?.id ?? "overview");
-  const toast = useUi((s) => s.showToast);
-  const confirm = useUi((s) => s.askConfirm);
+  const client = useQueryClient();
+  const navigate = useNavigate();
+  const projectQuery = useProject(projectId);
+  const project = projectQuery.data;
+  const error = projectQuery.isError ? formatError(projectQuery.error) : null;
   const activeTab = tabs.find((item) => item.id === tab) ?? tabs[0];
 
   const reload = () => {
-    void api.getProject(projectId).then(setProject).catch((e) => setError(formatError(e)));
+    void client.invalidateQueries({ queryKey: keys.project(projectId) });
+    void client.invalidateQueries({ queryKey: ["projects"] });
     if (hasCap(category, "todos")) void api.listTodos({ projectId }).then(setTodos);
     if (hasCap(category, "links")) void api.listLinks(projectId).then(setLinks);
     if (hasCap(category, "files")) {
@@ -113,25 +123,16 @@ export function ProjectDetail({ category, projectId }: { category: Category; pro
   if (error) return <EmptyState title="Could not open this item" body={error} />;
   if (!project) return <p className="muted">Loading…</p>;
 
-  const moreOpen = (
-    <>
-      {hasCap(category, "vscode") && project.localPath ? <button className="btn" type="button" onClick={() => void api.openVscode(project.localPath!)}>VS Code</button> : null}
-      {hasCap(category, "terminal") && project.localPath ? <button className="btn" type="button" onClick={() => void api.openTerminal(project.localPath!)}>Terminal</button> : null}
-      {hasCap(category, "github") && project.githubUrl ? <button className="btn" type="button" onClick={() => void api.openUrl(project.githubUrl!)}>GitHub</button> : null}
-      {project.websiteUrl ? <button className="btn" type="button" onClick={() => void api.openUrl(project.websiteUrl!)}>Website</button> : null}
-      {hasCap(category, "git") ? (
-        <>
-          <button className="btn" type="button" onClick={() => api.gitRun(project.id, "fetch").then(() => toast("Fetched")).catch((e) => toast(formatError(e), "error"))}>Fetch</button>
-          <button className="btn" type="button" onClick={() => api.gitRun(project.id, "pull").then(() => toast("Pulled")).catch((e) => toast(formatError(e), "error"))}>Pull</button>
-          <button className="btn" type="button" onClick={() => api.gitRun(project.id, "push").then(() => toast("Pushed")).catch((e) => toast(formatError(e), "error"))}>Push</button>
-        </>
-      ) : null}
-    </>
-  );
+  const isSoftware = category.kind === "software";
+  const backToList = () =>
+    void navigate({ to: "/workspace/$categoryId/$page", params: { categoryId: category.id, page: "items" } });
 
   return (
     <div className="detail-page">
       <header className="detail-head">
+        <button type="button" className="detail-back" onClick={backToList}>
+          <ArrowLeft size={14} /> {category.terminology.itemPlural}
+        </button>
         <div className="detail-head-row">
           <div className="detail-head-id">
             <h1 className="h1">{project.name}</h1>
@@ -139,6 +140,7 @@ export function ProjectDetail({ category, projectId }: { category: Category; pro
               <span className="badge">{project.status}</span>
               {project.tags.map((t) => <span className="tag" key={t.id}>{t.name}</span>)}
             </div>
+            {isSoftware ? <GitSummary git={project.git} showCommit={false} /> : null}
           </div>
           <div className="row detail-head-actions">
             {hasCap(category, "topics") && topics.length > 0 ? (
@@ -148,19 +150,42 @@ export function ProjectDetail({ category, projectId }: { category: Category; pro
                 options={[{ value: "", label: "Whole course" }, ...topics.map((t) => ({ value: t.id, label: t.title }))]}
               />
             ) : null}
+            {isSoftware ? (
+              <>
+                {hasCap(category, "vscode") ? <EditorButton project={project} /> : null}
+                {hasCap(category, "terminal") ? <TerminalButton project={project} /> : null}
+                {project.pinnedCommand ? <RunButton project={project} command={project.pinnedCommand} /> : null}
+                {hasCap(category, "git") ? <GitButton project={project} /> : null}
+              </>
+            ) : null}
             <TimerControls projectId={project.id} label={category.terminology.timerStart} topicId={topicId || undefined} onDone={reload} />
-            {project.localPath ? <button className="btn" type="button" onClick={() => void api.openPath(project.localPath!)}>Folder</button> : null}
+            {project.localPath ? (
+              <IconButton label="Open folder" className="btn icon" onClick={() => void api.openPath(project.localPath!)}>
+                <FolderOpen size={14} />
+              </IconButton>
+            ) : null}
+            {hasCap(category, "github") && project.githubUrl ? (
+              <IconButton label="GitHub" className="btn icon" onClick={() => void api.openUrl(project.githubUrl!)}>
+                <Github size={14} />
+              </IconButton>
+            ) : null}
+            {project.websiteUrl ? (
+              <IconButton label="Website" className="btn icon" onClick={() => void api.openUrl(project.websiteUrl!)}>
+                <Globe size={14} />
+              </IconButton>
+            ) : null}
             {project.primaryFilePath ? <button className="btn primary" type="button" onClick={() => void api.openPath(project.primaryFilePath!)}>Open primary file</button> : null}
-            <MoreMenu>{moreOpen}</MoreMenu>
           </div>
         </div>
-        <div className="detail-tabs" role="tablist" aria-label="Item sections">
-          {tabs.map((item) => (
-            <button key={item.id} type="button" role="tab" aria-selected={tab === item.id} onClick={() => setTab(item.id)}>
-              {item.label}
-            </button>
-          ))}
-        </div>
+        <Tabs.Root value={tab} onValueChange={(v) => setTab(v as DetailTab)}>
+          <Tabs.List className="detail-tabs" aria-label="Item sections">
+            {tabs.map((item) => (
+              <Tabs.Trigger key={item.id} value={item.id}>
+                {item.label}
+              </Tabs.Trigger>
+            ))}
+          </Tabs.List>
+        </Tabs.Root>
       </header>
 
       <div className="detail-stage">
@@ -184,7 +209,10 @@ export function ProjectDetail({ category, projectId }: { category: Category; pro
               {project.git?.isRepo || project.git?.error ? (
                 <section className="detail-section">
                   <h3 className="detail-section-title">Git</h3>
-                  {project.git?.isRepo ? <GitTable git={project.git} /> : <p className="muted">{project.git?.error}</p>}
+                  <GitSummary git={project.git} />
+                  {project.git?.isRepo ? (
+                    <button className="btn ghost" type="button" onClick={() => setTab("git")}>Branches, changes and history</button>
+                  ) : null}
                 </section>
               ) : null}
               <section className="detail-section">
@@ -255,29 +283,9 @@ export function ProjectDetail({ category, projectId }: { category: Category; pro
             </>
           ) : null}
 
-          {tab === "commands" ? (
-            <>
-              {commands.length === 0 ? <QuietEmpty title="No commands" body="Save a pinned command to run it from here." /> : null}
-              {commands.map((c) => (
-                <div key={c.id} className="list-row">
-                  <span className="list-row-title">{c.name}</span>
-                  <span className="list-row-meta">{c.command}</span>
-                  <button className="btn" type="button" onClick={() => {
-                    const go = (confirmed?: boolean) => api.runCommand({ projectId, command: c.command, confirmed }).then((out) => {
-                      setOutput(out);
-                      toast(out.code === 0 ? "Finished" : `Exit ${out.code}`);
-                    }).catch((e) => toast(formatError(e), "error"));
-                    if (c.dangerous) confirm("Run dangerous command?", c.command, () => void go(true), true);
-                    else void go();
-                  }}>Run</button>
-                </div>
-              ))}
-              {output ? <pre className="glass-panel command-output">{output.stdout || output.stderr || "(no output)"}</pre> : null}
-              <AddDisclosure label="Add command">
-                <CommandEditor projectId={project.id} onDone={reload} />
-              </AddDisclosure>
-            </>
-          ) : null}
+          {tab === "git" ? <GitTab project={project} /> : null}
+
+          {tab === "commands" ? <CommandsTab project={project} commands={commands} onChange={reload} /> : null}
 
           {tab === "versions" ? (
             <>
@@ -364,84 +372,6 @@ function AddDisclosure({ label, children }: { label: string; children: ReactNode
       <summary className="btn">{label}</summary>
       <div className="add-disclosure-body glass-panel">{children}</div>
     </details>
-  );
-}
-
-function GitTable({ git }: { git: GitStatus }) {
-  return (
-    <table className="git-table">
-      <thead>
-        <tr>
-          <th>Branch</th>
-          <th>Status</th>
-          <th>Ahead</th>
-          <th>Behind</th>
-          <th>Last commit</th>
-          <th>When</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>{git.branch || "—"}</td>
-          <td>{git.dirty ? "Dirty" : "Clean"}</td>
-          <td>{git.ahead}</td>
-          <td>{git.behind}</td>
-          <td className="git-commit">{git.lastCommit || "—"}</td>
-          <td>{formatDate(git.lastCommitAt)}</td>
-        </tr>
-      </tbody>
-    </table>
-  );
-}
-
-function MoreMenu({ children }: { children: ReactNode }) {
-  const { open, visible, hide, toggle } = useOpenTransition();
-  const root = useRef<HTMLDivElement>(null);
-  const items = Children.toArray(children).filter(Boolean);
-
-  useEffect(() => {
-    const onDoc = (e: MouseEvent) => {
-      if (!root.current?.contains(e.target as Node)) hide();
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") hide();
-    };
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [hide]);
-
-  if (items.length === 0) return null;
-  return (
-    <div className="more-menu" ref={root}>
-      <button className="btn" type="button" aria-haspopup="menu" aria-expanded={open} onClick={toggle}>
-        Open <ChevronDown size={14} />
-      </button>
-      {visible ? (
-        <div
-          className={`menu-pop more-menu-pop glass-panel ${open ? "is-open" : "is-closing"}`}
-          role="menu"
-          onClick={hide}
-        >
-          {children}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function CommandEditor({ projectId, onDone }: { projectId: string; onDone: () => void }) {
-  const [name, setName] = useState("dev");
-  const [command, setCommand] = useState("pnpm dev");
-  return (
-    <div className="row">
-      <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" />
-      <input className="input" value={command} onChange={(e) => setCommand(e.target.value)} placeholder="Command" />
-      <button className="btn" type="button" onClick={() => api.upsertCommand({ id: "", projectId, name, command, description: "", pinned: true, favorite: true, sortOrder: 0, dangerous: false }).then(onDone)}>Save</button>
-    </div>
   );
 }
 

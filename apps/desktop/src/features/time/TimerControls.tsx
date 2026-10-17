@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { api, formatError } from "../../lib/ipc";
+import { keys, useRunningTimer } from "../../lib/queries";
 import { useUi } from "../../stores/ui";
 
 export function elapsedFromStart(startedAt: string, nowMs = Date.now()) {
@@ -20,32 +21,26 @@ export function TimerControls({
   onDone: () => void;
 }) {
   const toast = useUi((s) => s.showToast);
-  const [runningHere, setRunningHere] = useState(false);
+  const client = useQueryClient();
+  const { data: timer } = useRunningTimer();
+  const active = timer && timer.isLocalDevice && !timer.entry.endedAt ? timer : null;
+  const runningHere = active?.entry.projectId === projectId;
+  const runningElsewhere = Boolean(active) && !runningHere;
 
-  const refresh = () => {
-    void api.runningTimer().then((t) => {
-      setRunningHere(Boolean(t?.isLocalDevice && t.entry.projectId === projectId && !t.entry.endedAt));
-    }).catch(() => setRunningHere(false));
-  };
-
-  useEffect(() => {
-    refresh();
-    const id = window.setInterval(refresh, 4000);
-    return () => window.clearInterval(id);
-  }, [projectId]);
-
-  const after = () => {
-    refresh();
+  const after = async () => {
+    await client.invalidateQueries({ queryKey: keys.timer });
+    await client.invalidateQueries({ queryKey: ["projects"] });
     onDone();
   };
+  const fail = (e: unknown) => toast(formatError(e), "error");
 
   if (runningHere) {
     return (
       <>
-        <button className="btn" type="button" onClick={() => api.pauseTimer().then(after).catch((e) => toast(formatError(e), "error"))}>
+        <button className="btn" type="button" onClick={() => api.pauseTimer().then(after).catch(fail)}>
           Pause
         </button>
-        <button className="btn" type="button" onClick={() => api.stopTimer().then(after).catch((e) => toast(formatError(e), "error"))}>
+        <button className="btn" type="button" onClick={() => api.stopTimer().then(after).catch(fail)}>
           Stop
         </button>
       </>
@@ -56,9 +51,17 @@ export function TimerControls({
     <button
       className="btn primary"
       type="button"
-      onClick={() => api.startTimer(projectId, topicId).then(after).catch((e) => toast(formatError(e), "error"))}
+      title={runningElsewhere ? `Stops the timer on ${active?.projectName} first` : undefined}
+      onClick={() =>
+        (async () => {
+          if (runningElsewhere) await api.stopTimer();
+          await api.startTimer(projectId, topicId);
+        })()
+          .then(after)
+          .catch(fail)
+      }
     >
-      {label}
+      {runningElsewhere ? "Switch timer here" : label}
     </button>
   );
 }

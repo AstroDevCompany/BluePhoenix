@@ -18,7 +18,8 @@ import {
   Code2,
   Plus,
 } from "lucide-react";
-import type { Bootstrap, SearchHit } from "../lib/types";
+import { useQuery } from "@tanstack/react-query";
+import type { Bootstrap, CommandDto, SearchHit } from "../lib/types";
 import { hasCap } from "../lib/types";
 import { api, formatError } from "../lib/ipc";
 import { useUi } from "../stores/ui";
@@ -35,6 +36,7 @@ import {
   startTimer,
   stopTimer,
 } from "../lib/projectActions";
+import { openEmbeddedTerminal, runInEmbeddedTerminal } from "../lib/terminalActions";
 import { useRunningTimer } from "../lib/queries";
 
 type Item = {
@@ -102,7 +104,16 @@ export function CommandPalette({
   const runningHere =
     timer && timer.isLocalDevice && !timer.entry.endedAt ? timer.entry.projectId : null;
 
-  const projectActions = (pc: ProjectWithCategory, isCurrent: boolean): Item[] => {
+  // Saved commands of the project the palette is acting on (drilled-in project, else the current one).
+  const commandsTarget = scope ?? currentProject;
+  const commandsQuery = useQuery({
+    queryKey: ["commands", commandsTarget?.project.id],
+    queryFn: () => api.listCommands(commandsTarget!.project.id),
+    enabled: open && Boolean(commandsTarget) && hasCap(commandsTarget!.category, "developmentCommands"),
+  });
+  const commands: CommandDto[] = commandsQuery.data ?? [];
+
+  const projectActions = (pc: ProjectWithCategory, isCurrent: boolean, cmds: CommandDto[] = []): Item[] => {
     const { project: p, category } = pc;
     const group = `Actions · ${p.name}`;
     const local = hasLocalFolder(p);
@@ -127,13 +138,36 @@ export function CommandPalette({
       });
     }
     if (hasCap(category, "terminal") && local) {
-      items.push({
-        key: `${p.id}:terminal`,
-        title: "Open terminal here",
-        group,
-        icon: <Terminal size={ICON} />,
-        run: () => openSystemTerminal(p),
-      });
+      items.push(
+        {
+          key: `${p.id}:terminal`,
+          title: "Open terminal here",
+          subtitle: "Embedded terminal panel",
+          group,
+          hint: isCurrent ? formatCombo("mod+j") : undefined,
+          icon: <Terminal size={ICON} />,
+          run: () => openEmbeddedTerminal(p),
+        },
+        {
+          key: `${p.id}:systerminal`,
+          title: "Open in system terminal",
+          group,
+          icon: <Terminal size={ICON} />,
+          run: () => openSystemTerminal(p),
+        },
+      );
+    }
+    if (local) {
+      cmds.forEach((c) =>
+        items.push({
+          key: `${p.id}:cmd:${c.id}`,
+          title: `Run ${c.name}`,
+          subtitle: c.command,
+          group,
+          icon: <Play size={ICON} />,
+          run: () => runInEmbeddedTerminal(p, c),
+        }),
+      );
     }
     if (local) {
       items.push({
@@ -242,7 +276,7 @@ export function CommandPalette({
 
   const items = useMemo<Item[]>(() => {
     if (scope) {
-      const acts = projectActions(scope, currentProject?.project.id === scope.project.id);
+      const acts = projectActions(scope, currentProject?.project.id === scope.project.id, commands);
       return query ? acts.filter((a) => matches(a.title, query)) : acts;
     }
     const byRecency = [...allProjects].sort((a, b) => {
@@ -258,7 +292,7 @@ export function CommandPalette({
     }
     if (!query) {
       const out: Item[] = [];
-      if (currentProject) out.push(...projectActions(currentProject, true));
+      if (currentProject) out.push(...projectActions(currentProject, true, commands));
       byRecency
         .filter((pc) => recentIds.includes(pc.project.id) && pc.project.id !== currentProject?.project.id)
         .slice(0, 5)
@@ -272,7 +306,7 @@ export function CommandPalette({
       .slice(0, 8)
       .forEach((pc) => out.push(projectItem(pc, "Projects")));
     if (currentProject) {
-      out.push(...projectActions(currentProject, true).filter((a) => matches(a.title, query)));
+      out.push(...projectActions(currentProject, true, commands).filter((a) => matches(a.title, query) || matches(a.subtitle ?? "", query)));
     }
     out.push(...globalActions.filter((a) => matches(a.title, query) || matches(a.subtitle ?? "", query)));
     const knownProjectIds = new Set(allProjects.map((pc) => pc.project.id));
@@ -293,7 +327,7 @@ export function CommandPalette({
       );
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scope, query, mode, allProjects, recentIds, currentProject, globalActions, remote, runningHere]);
+  }, [scope, query, mode, allProjects, recentIds, currentProject, globalActions, remote, runningHere, commands]);
 
   useEffect(() => {
     setActive((a) => Math.min(a, Math.max(0, items.length - 1)));

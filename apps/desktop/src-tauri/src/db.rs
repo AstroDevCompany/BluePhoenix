@@ -3008,3 +3008,113 @@ impl Db {
         self.with(f)
     }
 }
+
+/// Splits time entries across local calendar days and returns the last `days` days, oldest first.
+/// Entries without an end time are treated as running until `now`.
+pub fn bucket_days(
+    entries: &[(DateTime<Utc>, Option<DateTime<Utc>>)],
+    now: DateTime<Utc>,
+    days: i64,
+) -> Vec<(chrono::NaiveDate, i64)> {
+    use chrono::{Duration, Local, TimeZone};
+    let today = now.with_timezone(&Local).date_naive();
+    let mut out: Vec<(chrono::NaiveDate, i64)> = (0..days)
+        .rev()
+        .map(|back| (today - Duration::days(back), 0))
+        .collect();
+    for (start, end) in entries {
+        let end = end.unwrap_or(now).min(now);
+        if end <= *start {
+            continue;
+        }
+        for (date, total) in out.iter_mut() {
+            let Some(day_start) = Local
+                .from_local_datetime(&date.and_hms_opt(0, 0, 0).unwrap_or_default())
+                .earliest()
+            else {
+                continue;
+            };
+            let day_start = day_start.with_timezone(&Utc);
+            let day_end = day_start + Duration::days(1);
+            let from = (*start).max(day_start);
+            let to = end.min(day_end);
+            if to > from {
+                *total += (to - from).num_seconds();
+            }
+        }
+    }
+    out
+}
+
+pub fn time_summary(conn: &Connection, category_id: Option<&str>) -> AppResult<TimeSummaryDto> {
+    let now_utc = Utc::now();
+    let cutoff = (now_utc - chrono::Duration::days(9)).to_rfc3339_opts(SecondsFormat::Millis, true);
+    let sql = "SELECT t.started_at, t.ended_at FROM time_entries t
+         JOIN projects p ON p.id = t.project_id
+         WHERE t.deleted_at IS NULL AND p.deleted_at IS NULL
+           AND (t.ended_at IS NULL OR t.ended_at >= ?1)
+           AND (?2 IS NULL OR p.category_id = ?2)";
+    let mut stmt = conn.prepare(sql)?;
+    let entries: Vec<(DateTime<Utc>, Option<DateTime<Utc>>)> = stmt
+        .query_map(params![cutoff, category_id], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?))
+        })?
+        .filter_map(|r| r.ok())
+        .map(|(s, e)| (parse_dt(&s), e.as_deref().map(parse_dt)))
+        .collect();
+    let days: Vec<DaySecondsDto> = bucket_days(&entries, now_utc, 7)
+        .into_iter()
+        .map(|(d, seconds)| DaySecondsDto {
+            date: d.format("%Y-%m-%d").to_string(),
+            seconds,
+        })
+        .collect();
+    Ok(TimeSummaryDto {
+        today_seconds: days.last().map(|d| d.seconds).unwrap_or(0),
+        week_seconds: days.iter().map(|d| d.seconds).sum(),
+        days,
+    })
+}
+
+#[cfg(test)]
+mod time_summary_tests {
+    use super::*;
+    use chrono::{Duration, Local, TimeZone};
+
+    fn local_noon(days_ago: i64) -> DateTime<Utc> {
+        let date = Local::now().date_naive() - Duration::days(days_ago);
+        Local
+            .from_local_datetime(&date.and_hms_opt(12, 0, 0).unwrap())
+            .earliest()
+            .unwrap()
+            .with_timezone(&Utc)
+    }
+
+    #[test]
+    fn splits_entries_by_local_day() {
+        let now = local_noon(0) + Duration::hours(1);
+        let entries = vec![
+            (local_noon(0), Some(local_noon(0) + Duration::minutes(30))),
+            (local_noon(1), Some(local_noon(1) + Duration::hours(2))),
+            (local_noon(0), None), // still running: counts until `now`
+        ];
+        let days = bucket_days(&entries, now, 7);
+        assert_eq!(days.len(), 7);
+        assert_eq!(days[6].1, 30 * 60 + 3600);
+        assert_eq!(days[5].1, 2 * 3600);
+        assert_eq!(days[0].1, 0);
+    }
+
+    #[test]
+    fn entries_crossing_midnight_are_split() {
+        let now = local_noon(0) + Duration::hours(1);
+        let midnight = local_noon(0) - Duration::hours(12);
+        let entries = vec![(
+            midnight - Duration::hours(1),
+            Some(midnight + Duration::hours(2)),
+        )];
+        let days = bucket_days(&entries, now, 7);
+        assert_eq!(days[5].1, 3600);
+        assert_eq!(days[6].1, 2 * 3600);
+    }
+}

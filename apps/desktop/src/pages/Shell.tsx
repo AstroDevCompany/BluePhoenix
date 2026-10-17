@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   Award,
@@ -10,7 +10,8 @@ import {
   Settings as SettingsIcon,
   Terminal,
 } from "lucide-react";
-import type { Bootstrap, Category } from "../lib/types";
+import type { Category } from "../lib/types";
+import { useShell } from "../lib/shellContext";
 import { Titlebar } from "../components/Titlebar";
 import { CommandPalette } from "../components/CommandPalette";
 import { ShortcutSheet } from "../components/ShortcutSheet";
@@ -37,25 +38,9 @@ import {
   type ProjectWithCategory,
 } from "../lib/queries";
 import { openInEditor, startTimer, stopTimer } from "../lib/projectActions";
-
-export type ShellApi = {
-  bootstrap: Bootstrap;
-  reload: () => void;
-  /** Reloads bootstrap data and invalidates every cached query. */
-  bump: () => void;
-};
-
-const Ctx = createContext<ShellApi | null>(null);
-
-export function useShell() {
-  const value = useContext(Ctx);
-  if (!value) throw new Error("Shell context missing");
-  return value;
-}
-
-export function ShellProvider({ value, children }: { value: ShellApi; children: React.ReactNode }) {
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
-}
+import { TerminalDock } from "../components/TerminalDock";
+import { initTerminals, openEmbeddedTerminal } from "../lib/terminalActions";
+import { useTerminals } from "../stores/terminals";
 
 const NAV_ICONS: Record<string, typeof Code2> = {
   overview: LayoutDashboard,
@@ -86,6 +71,7 @@ export function RootChrome() {
   const routeProjectId = route.name === "workspace" ? route.projectId : undefined;
 
   useGitStatusEvents();
+  useEffect(() => initTerminals(), []);
   const allProjects = useAllProjects(enabled);
   const { data: categoryProjects = [] } = useProjects(currentCategory?.id ?? "");
   const { data: timer } = useRunningTimer();
@@ -169,6 +155,12 @@ export function RootChrome() {
           e.preventDefault();
           void openInEditor(currentProject.project);
         }
+      } else if (matchesCombo(e, "mod+j")) {
+        e.preventDefault();
+        const term = useTerminals.getState();
+        if (term.sessions.length > 0) term.setDockOpen(!term.dockOpen);
+        else if (currentProject) void openEmbeddedTerminal(currentProject.project);
+        else useUi.getState().showToast("Open a project to start a terminal", "error");
       } else if (matchesCombo(e, "?") && !isTypingTarget(e.target)) {
         e.preventDefault();
         setShortcuts(true);
@@ -268,6 +260,7 @@ export function RootChrome() {
       <main className="main" id="main">
         <Outlet />
       </main>
+      <TerminalDock currentProject={currentProject?.project} />
       <AiChatPanel projectId={routeProjectId} />
       <AiSetupPopup />
       {createOpen && createIntent === "project" ? (

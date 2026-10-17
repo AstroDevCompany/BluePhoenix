@@ -11,7 +11,8 @@ import type { WorkspacePage } from "./components/router";
 import { WorkspaceHome } from "./pages/WorkspacePages";
 import { SettingsPage } from "./pages/SettingsPage";
 import { AchievementsPage } from "./features/achievements/AchievementsPage";
-import { RootChrome, useShell } from "./pages/Shell";
+import { RootChrome } from "./pages/Shell";
+import { useShell } from "./lib/shellContext";
 
 const rootRoute = createRootRoute({
   component: RootChrome,

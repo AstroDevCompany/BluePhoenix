@@ -39,6 +39,7 @@ export function TimeEntries({
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const toast = useUi((s) => s.showToast);
+  const confirm = useUi((s) => s.askConfirm);
 
   const load = () => {
     void api.listTimeEntries(projectId).then(setRows);
@@ -148,13 +149,29 @@ export function TimeEntries({
               {row.topicTitle ? ` · ${row.topicTitle}` : ""}
               {row.notes ? ` · ${row.notes}` : ""}
             </span>
-            <button
-              className="btn ghost"
-              type="button"
-              onClick={() => api.updateTimeEntry({ id: row.id, notes: "" }).then(() => { load(); onChanged(); }).catch((e) => toast(formatError(e), "error"))}
-            >
-              Clear note
-            </button>
+            <span className="row">
+              {row.notes ? (
+                <button
+                  className="btn ghost"
+                  type="button"
+                  onClick={() => api.updateTimeEntry({ id: row.id, notes: "" }).then(() => { load(); onChanged(); }).catch((e) => toast(formatError(e), "error"))}
+                >
+                  Clear note
+                </button>
+              ) : null}
+              <button
+                className="btn ghost"
+                type="button"
+                aria-label="Delete entry"
+                onClick={() =>
+                  confirm("Delete time entry?", `${formatDate(row.startedAt)} · ${formatDuration(row.seconds)}`, () => {
+                    void api.deleteTimeEntry(row.id).then(() => { load(); onChanged(); }).catch((e) => toast(formatError(e), "error"));
+                  }, true)
+                }
+              >
+                Delete
+              </button>
+            </span>
           </div>
         ))
       )}

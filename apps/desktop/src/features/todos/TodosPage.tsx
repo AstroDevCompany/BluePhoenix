@@ -1,8 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Category, Todo } from "../../lib/types";
-import { api, formatError } from "../../lib/ipc";
-import { keys } from "../../lib/queries";
-import { useUi } from "../../stores/ui";
+import { useTodos, useToggleTodo } from "../../lib/queries";
 import { ErrorNote } from "../../components/ui/ErrorNote";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { PageHeader } from "../../components/PageHeader";
@@ -29,31 +26,8 @@ function TodoRow({
 }
 
 export function TodosPage({ category }: { category: Category }) {
-  const client = useQueryClient();
-  const todosQuery = useQuery({
-    queryKey: keys.todos(category.id),
-    queryFn: () => api.listTodos({ categoryId: category.id }),
-  });
-  const toggle = useMutation({
-    mutationFn: (t: Todo) => api.setTodoStatus(t.id, t.status === "completed" ? "open" : "completed"),
-    // Flip the row immediately; the refetch below reconciles with the backend.
-    onMutate: async (t) => {
-      await client.cancelQueries({ queryKey: keys.todos(category.id) });
-      const previous = client.getQueryData<Todo[]>(keys.todos(category.id));
-      client.setQueryData<Todo[]>(keys.todos(category.id), (old) =>
-        old?.map((x) => (x.id === t.id ? { ...x, status: t.status === "completed" ? "open" : "completed" } : x)),
-      );
-      return { previous };
-    },
-    onError: (e, _t, ctx) => {
-      if (ctx?.previous) client.setQueryData(keys.todos(category.id), ctx.previous);
-      useUi.getState().showToast(formatError(e), "error");
-    },
-    onSettled: () => {
-      void client.invalidateQueries({ queryKey: keys.todos(category.id) });
-      void client.invalidateQueries({ queryKey: ["projects"] });
-    },
-  });
+  const todosQuery = useTodos(category.id);
+  const toggle = useToggleTodo(category.id);
   const todos = todosQuery.data ?? [];
   const row = (t: Todo) => <TodoRow key={t.id} todo={t} onToggle={() => toggle.mutate(t)} />;
   return (

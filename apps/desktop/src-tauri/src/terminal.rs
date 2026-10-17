@@ -36,6 +36,7 @@ const NO_EXIT_CODE: i64 = i64::MIN;
 pub struct TerminalSessionDto {
     pub id: String,
     pub project_id: Option<String>,
+    pub command_id: Option<String>,
     pub title: String,
     pub command: Option<String>,
     pub cwd: String,
@@ -76,6 +77,7 @@ pub struct TerminalRegistry {
 
 pub struct SpawnRequest {
     pub project_id: Option<String>,
+    pub command_id: Option<String>,
     pub title: String,
     pub command: Option<String>,
     pub cwd: PathBuf,
@@ -245,6 +247,7 @@ impl TerminalRegistry {
         let info = TerminalSessionDto {
             id: id.clone(),
             project_id: req.project_id,
+            command_id: req.command_id,
             title: req.title,
             command: req.command,
             cwd: req.cwd.to_string_lossy().to_string(),
@@ -494,6 +497,7 @@ mod tests {
                 sink,
                 SpawnRequest {
                     project_id: None,
+                    command_id: None,
                     title: "t".into(),
                     command: Some("echo hello-$BP_TEST && exit 3".into()),
                     cwd: std::env::temp_dir(),
@@ -537,6 +541,7 @@ mod tests {
                 sink,
                 SpawnRequest {
                     project_id: None,
+                    command_id: None,
                     title: "sleep".into(),
                     command: Some("sleep 30".into()),
                     cwd: std::env::temp_dir(),

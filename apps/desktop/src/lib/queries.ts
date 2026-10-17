@@ -1,8 +1,10 @@
 import { useEffect } from "react";
-import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { api } from "./ipc";
-import type { Category, GitStatusUpdate, ProjectCard } from "./types";
+import type { Category, GitStatusUpdate, ProjectCard, Todo } from "./types";
+import { useUi } from "../stores/ui";
+import { formatError } from "./ipc";
 
 export const keys = {
   projects: (categoryId: string) => ["projects", categoryId] as const,
@@ -10,6 +12,7 @@ export const keys = {
   todos: (categoryId: string) => ["todos", categoryId] as const,
   exams: (categoryId: string) => ["exams", categoryId] as const,
   timer: ["running-timer"] as const,
+  timeSummary: (categoryId: string) => ["time-summary", categoryId] as const,
   editors: ["launch", "editors"] as const,
   terminals: ["launch", "terminals"] as const,
 };
@@ -74,4 +77,41 @@ export function useGitStatusEvents() {
       unlisten?.();
     };
   }, [client]);
+}
+
+export function useTodos(categoryId: string) {
+  return useQuery({ queryKey: keys.todos(categoryId), queryFn: () => api.listTodos({ categoryId }) });
+}
+
+export function useTimeSummary(categoryId: string) {
+  return useQuery({
+    queryKey: keys.timeSummary(categoryId),
+    queryFn: () => api.timeSummary(categoryId),
+    refetchInterval: 60_000,
+  });
+}
+
+/** Completes/reopens a TODO with an optimistic flip that rolls back on failure. */
+export function useToggleTodo(categoryId: string) {
+  const client = useQueryClient();
+  const key = keys.todos(categoryId);
+  return useMutation({
+    mutationFn: (t: Todo) => api.setTodoStatus(t.id, t.status === "completed" ? "open" : "completed"),
+    onMutate: async (t) => {
+      await client.cancelQueries({ queryKey: key });
+      const previous = client.getQueryData<Todo[]>(key);
+      client.setQueryData<Todo[]>(key, (old) =>
+        old?.map((x) => (x.id === t.id ? { ...x, status: t.status === "completed" ? "open" : "completed" } : x)),
+      );
+      return { previous };
+    },
+    onError: (e, _t, ctx) => {
+      if (ctx?.previous) client.setQueryData(key, ctx.previous);
+      useUi.getState().showToast(formatError(e), "error");
+    },
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: key });
+      void client.invalidateQueries({ queryKey: ["projects"] });
+    },
+  });
 }

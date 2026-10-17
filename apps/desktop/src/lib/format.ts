@@ -50,3 +50,20 @@ export function formatActivityEvent(eventType: string) {
   if (ACTIVITY_LABELS[eventType]) return ACTIVITY_LABELS[eventType];
   return eventType.replaceAll(".", " · ").replaceAll("_", " ").replace(/^\w/, (c) => c.toUpperCase());
 }
+
+/** Compact relative time such as "5m ago" or "3d ago". */
+export function formatRelative(value?: string | null, nowMs = Date.now()) {
+  if (!value) return "";
+  const t = Date.parse(value);
+  if (Number.isNaN(t)) return "";
+  const seconds = Math.max(0, Math.floor((nowMs - t) / 1000));
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  return months < 12 ? `${months}mo ago` : `${Math.floor(months / 12)}y ago`;
+}

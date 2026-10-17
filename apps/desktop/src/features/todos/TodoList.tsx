@@ -1,65 +1,96 @@
 import { useState } from "react";
+import { Trash2 } from "lucide-react";
 import type { Todo } from "../../lib/types";
-import { api } from "../../lib/ipc";
+import { api, formatError } from "../../lib/ipc";
+import { useUi } from "../../stores/ui";
+import { IconButton } from "../../components/ui/Tooltip";
+
+const PRIORITIES = ["low", "medium", "high"] as const;
 
 export function TodoList({
   projectId,
-  categoryId,
   todos,
   onChange,
-  stage = false,
 }: {
   projectId: string;
-  categoryId: string;
+  categoryId?: string;
   todos: Todo[];
   onChange: () => void;
   stage?: boolean;
 }) {
+  const toast = useUi((s) => s.showToast);
   const [title, setTitle] = useState("");
-  const add = (
-    <div className="row">
-      <input className="input" placeholder="New TODO" value={title} onChange={(e) => setTitle(e.target.value)} />
-      <button
-        className="btn"
-        type="button"
-        onClick={() => {
-          if (!title.trim()) return;
-          void api.createTodo({ projectId, title, categoryId }).then(() => {
-            setTitle("");
-            onChange();
-          });
+  const [priority, setPriority] = useState<(typeof PRIORITIES)[number]>("medium");
+  const [showDone, setShowDone] = useState(false);
+
+  const open = todos.filter((t) => t.status !== "completed");
+  const done = todos.filter((t) => t.status === "completed");
+  const shown = showDone ? [...open, ...done] : open;
+
+  const fail = (e: unknown) => toast(formatError(e), "error");
+  const add = () => {
+    const text = title.trim();
+    if (!text) return;
+    void api
+      .createTodo({ projectId, title: text, priority })
+      .then(() => {
+        setTitle("");
+        onChange();
+      })
+      .catch(fail);
+  };
+
+  return (
+    <div className="todo-list">
+      <form
+        className="todo-add"
+        onSubmit={(e) => {
+          e.preventDefault();
+          add();
         }}
       >
-        Add
-      </button>
-    </div>
-  );
-  return (
-    <div>
-      {todos.length === 0 ? (
+        <input
+          className="input"
+          placeholder="Add a TODO and press Enter…"
+          aria-label="New TODO"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+        />
+        <div className="seg" role="group" aria-label="Priority">
+          {PRIORITIES.map((p) => (
+            <button key={p} type="button" className={priority === p ? "active" : ""} aria-pressed={priority === p} onClick={() => setPriority(p)} style={{ width: 64 }}>
+              {p}
+            </button>
+          ))}
+        </div>
+        <button className="btn primary" type="submit" disabled={!title.trim()}>Add</button>
+      </form>
+      {open.length === 0 ? (
         <div className="detail-empty">
-          <p className="detail-empty-title">No TODOs</p>
-          <p className="muted">Add a task for this item.</p>
+          <p className="detail-empty-title">{done.length > 0 ? "All done" : "No TODOs"}</p>
+          <p className="muted">{done.length > 0 ? `${done.length} completed.` : "Add a task for this project above."}</p>
         </div>
       ) : null}
-      {todos.slice(0, 40).map((t) => (
-        <label key={t.id} className={`list-row ${t.status === "completed" ? "is-done" : ""}`}>
+      {shown.slice(0, 200).map((t) => (
+        <div key={t.id} className={`todo-row list-row ${t.status === "completed" ? "is-done" : ""}`}>
           <input
             type="checkbox"
+            aria-label={`Complete ${t.title}`}
             checked={t.status === "completed"}
-            onChange={() => void api.setTodoStatus(t.id, t.status === "completed" ? "open" : "completed").then(onChange)}
+            onChange={() => void api.setTodoStatus(t.id, t.status === "completed" ? "open" : "completed").then(onChange).catch(fail)}
           />
           <span className="list-row-title">{t.title}</span>
-        </label>
+          <span className={`priority-dot p-${t.priority}`} title={`${t.priority} priority`} aria-label={`${t.priority} priority`} />
+          <IconButton label="Delete TODO" className="btn icon ghost todo-delete" onClick={() => void api.deleteTodo(t.id).then(onChange).catch(fail)}>
+            <Trash2 size={13} />
+          </IconButton>
+        </div>
       ))}
-      {stage ? (
-        <details className="add-disclosure">
-          <summary className="btn">Add TODO</summary>
-          <div className="add-disclosure-body glass-panel">{add}</div>
-        </details>
-      ) : (
-        add
-      )}
+      {done.length > 0 ? (
+        <button className="btn ghost" type="button" onClick={() => setShowDone((v) => !v)}>
+          {showDone ? "Hide" : "Show"} {done.length} completed
+        </button>
+      ) : null}
     </div>
   );
 }

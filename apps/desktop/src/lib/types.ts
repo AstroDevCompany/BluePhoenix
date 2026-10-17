@@ -282,11 +282,6 @@ export type RunningTimer = {
   isLocalDevice: boolean;
 };
 
-export type CommandOutput = {
-  code: number;
-  stdout: string;
-  stderr: string;
-};
 
 export type GpaDashboard = {
   simpleAverage?: number | null;
@@ -333,6 +328,7 @@ export type LaunchOption = { id: string; name: string };
 export type TerminalSession = {
   id: string;
   projectId?: string | null;
+  commandId?: string | null;
   title: string;
   command?: string | null;
   cwd: string;
@@ -342,3 +338,10 @@ export type TerminalSession = {
 };
 export type TerminalDataEvent = { id: string; data: string };
 export type TerminalExitEvent = { id: string; code?: number | null };
+
+export type TimeSummary = {
+  todaySeconds: number;
+  weekSeconds: number;
+  /** Last seven local days including today, oldest first. */
+  days: { date: string; seconds: number }[];
+};

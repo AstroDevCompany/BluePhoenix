@@ -414,14 +414,6 @@ pub struct UpdateCheckDto {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CommandOutputDto {
-    pub code: i32,
-    pub stdout: String,
-    pub stderr: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct SearchHitDto {
     pub entity_type: String,
     pub entity_id: String,
@@ -532,4 +524,21 @@ pub struct DocumentChunkDto {
     pub page: Option<i64>,
     pub section: Option<String>,
     pub text: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DaySecondsDto {
+    /// Local calendar date, `YYYY-MM-DD`.
+    pub date: String,
+    pub seconds: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TimeSummaryDto {
+    pub today_seconds: i64,
+    /// The last seven local days including today, oldest first.
+    pub days: Vec<DaySecondsDto>,
+    pub week_seconds: i64,
 }
