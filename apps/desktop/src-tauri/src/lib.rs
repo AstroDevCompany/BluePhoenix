@@ -6,6 +6,7 @@ mod db;
 mod documents;
 mod error;
 mod git;
+mod git_cache;
 mod jobs;
 #[cfg(target_os = "macos")]
 mod macos;
@@ -15,6 +16,7 @@ mod project_facts;
 mod secrets;
 mod state;
 mod sync;
+mod terminal;
 mod updater;
 
 use crate::db::Db;
@@ -61,9 +63,11 @@ pub fn run() {
                 db,
                 http,
                 local_llm,
+                terminals: Default::default(),
             });
             crate::secrets::init(&dir);
             crate::jobs::spawn(app.handle().clone());
+            crate::git_cache::spawn_refresher(app.handle().clone());
             #[cfg(desktop)]
             {
                 crate::commands::sync_launch_at_startup(app.handle());
@@ -78,6 +82,11 @@ pub fn run() {
                     crate::macos::install(&window);
                 }
                 let _ = window.set_shadow(true);
+                window.on_window_event(|event| {
+                    if let tauri::WindowEvent::Focused(focused) = event {
+                        crate::git_cache::set_window_focused(*focused);
+                    }
+                });
                 if let Some(icon) = app.default_window_icon() {
                     let _ = window.set_icon(icon.clone());
                 }
@@ -166,12 +175,27 @@ pub fn run() {
             commands::open_url,
             commands::open_vscode,
             commands::open_terminal,
+            commands::open_in_editor,
+            commands::list_editors,
+            commands::list_terminals,
             commands::list_commands,
             commands::upsert_command,
             commands::delete_command,
             commands::run_command,
+            commands::term_spawn,
+            commands::term_write,
+            commands::term_resize,
+            commands::term_kill,
+            commands::term_close,
+            commands::term_list,
+            commands::term_backlog,
             commands::git_status,
             commands::git_run,
+            commands::git_refresh,
+            commands::git_fetch_all,
+            commands::git_branches,
+            commands::git_changes,
+            commands::git_log,
             commands::list_versions,
             commands::add_version,
             commands::list_topics,
@@ -227,7 +251,6 @@ pub fn run() {
             ai::ai_suggest_commit,
             ai::ai_inspect_software_folder,
             ai::ai_scan_commands,
-            ai::git_log,
             ai::git_diff,
             ai::list_document_records,
             commands::auth_register,
@@ -245,6 +268,7 @@ pub fn run() {
             ) {
                 if let Some(state) = app.try_state::<AppState>() {
                     state.local_llm.shutdown();
+                    state.terminals.kill_all();
                 }
             }
         });

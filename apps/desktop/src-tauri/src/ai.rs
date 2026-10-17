@@ -1078,20 +1078,6 @@ fn map_tag_ids(tags: &[TagDto], names: &[String], kind: &str) -> Vec<String> {
 }
 
 #[tauri::command]
-pub fn git_log(state: State<AppState>, project_id: String) -> AppResult<Vec<String>> {
-    state.db.with(|c| {
-        let git = db::load_settings(c).git_path;
-        let (local, _) = db::project_binding(c, &state.db.device_id, &project_id);
-        let path = local.ok_or(AppError::FolderMissing)?;
-        Ok(crate::git::recent_subjects(
-            &git,
-            std::path::Path::new(&path),
-            20,
-        ))
-    })
-}
-
-#[tauri::command]
 pub fn git_diff(
     state: State<AppState>,
     project_id: String,

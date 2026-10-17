@@ -4,4 +4,5 @@ pub struct AppState {
     pub db: Db,
     pub http: reqwest::Client,
     pub local_llm: bluephoenix_ai::local::LocalEngine,
+    pub terminals: crate::terminal::TerminalRegistry,
 }

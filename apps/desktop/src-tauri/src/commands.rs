@@ -112,12 +112,10 @@ pub fn list_projects(
     include_archived: Option<bool>,
 ) -> AppResult<Vec<ProjectCardDto>> {
     state.db.with(|c| {
-        let git = db::load_settings(c).git_path;
         db::list_projects(
             c,
             &category_id,
             &state.db.device_id,
-            &git,
             include_archived.unwrap_or(false),
         )
     })
@@ -125,10 +123,9 @@ pub fn list_projects(
 
 #[tauri::command]
 pub fn get_project(state: State<AppState>, id: String) -> AppResult<ProjectCardDto> {
-    state.db.with(|c| {
-        let git = db::load_settings(c).git_path;
-        db::project_card(c, &id, &state.db.device_id, &git)
-    })
+    state
+        .db
+        .with(|c| db::project_card(c, &id, &state.db.device_id))
 }
 
 #[tauri::command]
@@ -204,8 +201,7 @@ pub fn update_project(
         if let Some(tags) = input.tag_ids {
             db::replace_project_tags(c, &input.id, &tags)?;
         }
-        let git = db::load_settings(c).git_path;
-        db::project_card(c, &input.id, &state.db.device_id, &git)
+        db::project_card(c, &input.id, &state.db.device_id)
     })
 }
 
@@ -476,14 +472,57 @@ pub fn open_url(app: AppHandle, url: String) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub fn open_vscode(state: State<AppState>, folder: String) -> AppResult<()> {
-    let vscode = state.db.with(|c| Ok(db::load_settings(c).vscode_path))?;
-    crate::native::open_vscode(&vscode, std::path::Path::new(&folder))
+pub fn list_editors() -> Vec<crate::native::LaunchOption> {
+    crate::native::list_editors()
 }
 
 #[tauri::command]
-pub fn open_terminal(folder: String) -> AppResult<()> {
-    crate::native::open_terminal(std::path::Path::new(&folder))
+pub fn list_terminals() -> Vec<crate::native::LaunchOption> {
+    crate::native::list_terminals()
+}
+
+/// Opens a folder in an editor: the given id, else the saved preference, else the first one installed.
+#[tauri::command]
+pub fn open_in_editor(
+    state: State<AppState>,
+    folder: String,
+    editor: Option<String>,
+) -> AppResult<()> {
+    let preferred = state
+        .db
+        .with(|c| Ok(db::load_settings(c).preferred_editor))?;
+    let editor = editor.or(Some(preferred));
+    crate::native::open_in_editor(editor.as_deref(), std::path::Path::new(&folder))
+}
+
+#[tauri::command]
+pub fn open_vscode(state: State<AppState>, folder: String) -> AppResult<()> {
+    open_in_editor(state, folder, Some("vscode".into()))
+}
+
+/// Opens the system terminal in a folder, optionally running a command (dangerous ones need confirmation).
+#[tauri::command]
+pub fn open_terminal(
+    state: State<AppState>,
+    folder: String,
+    command: Option<String>,
+    terminal: Option<String>,
+    confirmed: Option<bool>,
+) -> AppResult<()> {
+    if let Some(cmd) = &command {
+        if is_dangerous(cmd) && confirmed != Some(true) {
+            return Err(AppError::NeedsConfirm);
+        }
+    }
+    let preferred = match terminal {
+        Some(t) => t,
+        None => state.db.with(|c| Ok(db::load_settings(c).terminal))?,
+    };
+    crate::native::open_terminal(
+        &preferred,
+        std::path::Path::new(&folder),
+        command.as_deref(),
+    )
 }
 
 #[tauri::command]
@@ -538,43 +577,317 @@ pub fn run_command(
 }
 
 #[tauri::command]
-pub fn git_status(state: State<AppState>, project_id: String) -> AppResult<GitStatusDto> {
-    state.db.with(|c| {
-        let git = db::load_settings(c).git_path;
-        let (local, _) = db::project_binding(c, &state.db.device_id, &project_id);
-        match local {
-            Some(path) => Ok(crate::git::status(&git, std::path::Path::new(&path))),
-            None => Ok(GitStatusDto {
-                available: true,
-                is_repo: false,
-                branch: None,
-                ahead: 0,
-                behind: 0,
-                dirty: false,
-                last_commit: None,
-                last_commit_at: None,
-                error: Some("No local folder configured".into()),
-            }),
+#[allow(clippy::too_many_arguments)]
+pub fn term_spawn(
+    app: AppHandle,
+    state: State<AppState>,
+    project_id: Option<String>,
+    command_id: Option<String>,
+    command: Option<String>,
+    cols: Option<u16>,
+    rows: Option<u16>,
+    confirmed: Option<bool>,
+) -> AppResult<crate::terminal::TerminalSessionDto> {
+    // Resolve everything from the DB first so the lock is released before spawning.
+    let (project_id, title, command, working_dir, env, root) = state.db.with(|c| {
+        let mut project_id = project_id;
+        let mut title = None;
+        let mut command = command.filter(|c| !c.trim().is_empty());
+        let mut working_dir = None;
+        let mut env = Vec::new();
+        if let Some(cid) = command_id {
+            let row = c
+                .query_row(
+                    "SELECT project_id, name, command, working_directory, env_json FROM commands WHERE id=?1 AND deleted_at IS NULL",
+                    [&cid],
+                    |r| {
+                        Ok((
+                            r.get::<_, String>(0)?,
+                            r.get::<_, String>(1)?,
+                            r.get::<_, String>(2)?,
+                            r.get::<_, Option<String>>(3)?,
+                            r.get::<_, Option<String>>(4)?,
+                        ))
+                    },
+                )
+                .map_err(|_| AppError::msg("Command not found"))?;
+            project_id = Some(row.0);
+            title = Some(row.1);
+            command = Some(row.2);
+            working_dir = row.3;
+            if let Some(raw) = row.4 {
+                if let Ok(map) = serde_json::from_str::<std::collections::HashMap<String, String>>(&raw) {
+                    env = map.into_iter().collect();
+                }
+            }
         }
-    })
+        let root = match &project_id {
+            Some(pid) => db::project_binding(c, &state.db.device_id, pid)
+                .0
+                .filter(|p| !p.trim().is_empty())
+                .map(PathBuf::from),
+            None => None,
+        };
+        Ok((project_id, title, command, working_dir, env, root))
+    })?;
+    if let Some(cmd) = &command {
+        if is_dangerous(cmd) && confirmed != Some(true) {
+            return Err(AppError::NeedsConfirm);
+        }
+    }
+    let cwd = match root {
+        Some(root) => crate::terminal::resolve_cwd(&root, working_dir.as_deref()),
+        None if project_id.is_some() => return Err(AppError::FolderMissing),
+        None => dirs::home_dir().unwrap_or_else(|| PathBuf::from("/")),
+    };
+    let title = title.unwrap_or_else(|| command.clone().unwrap_or_else(|| "Terminal".to_string()));
+    state.terminals.spawn(
+        crate::terminal::app_sink(&app),
+        crate::terminal::SpawnRequest {
+            project_id,
+            title,
+            command,
+            cwd,
+            env,
+            cols: cols.unwrap_or(100),
+            rows: rows.unwrap_or(28),
+        },
+    )
 }
 
 #[tauri::command]
-pub fn git_run(state: State<AppState>, project_id: String, action: String) -> AppResult<String> {
+pub fn term_write(state: State<AppState>, id: String, data: String) -> AppResult<()> {
+    state.terminals.write(&id, &data)
+}
+
+#[tauri::command]
+pub fn term_resize(state: State<AppState>, id: String, cols: u16, rows: u16) -> AppResult<()> {
+    state.terminals.resize(&id, cols, rows)
+}
+
+#[tauri::command]
+pub fn term_kill(state: State<AppState>, id: String) -> AppResult<()> {
+    state.terminals.kill(&id)
+}
+
+#[tauri::command]
+pub fn term_close(state: State<AppState>, id: String) -> AppResult<()> {
+    state.terminals.close(&id)
+}
+
+#[tauri::command]
+pub fn term_list(state: State<AppState>) -> Vec<crate::terminal::TerminalSessionDto> {
+    state.terminals.list()
+}
+
+#[tauri::command]
+pub fn term_backlog(state: State<AppState>, id: String) -> AppResult<String> {
+    state.terminals.backlog(&id)
+}
+
+/// Looks up the repo folder (and git binary setting) without holding the DB lock afterwards.
+fn repo_target(state: &AppState, project_id: &str) -> AppResult<(String, std::path::PathBuf)> {
     state.db.with(|c| {
         let git = db::load_settings(c).git_path;
-        let (local, _) = db::project_binding(c, &state.db.device_id, &project_id);
-        let path = local.ok_or(AppError::FolderMissing)?;
-        let args: &[&str] = match action.as_str() {
-            "pull" => &["pull"],
-            "fetch" => &["fetch"],
-            "push" => &["push"],
-            _ => return Err(AppError::msg("Unknown git action")),
-        };
-        let out = crate::git::run_git(&git, std::path::Path::new(&path), args)?;
-        db::evaluate_project(c, &project_id)?;
-        Ok(out)
+        let (local, _) = db::project_binding(c, &state.db.device_id, project_id);
+        let path = local
+            .filter(|p| !p.trim().is_empty())
+            .ok_or(AppError::FolderMissing)?;
+        Ok((git, std::path::PathBuf::from(path)))
     })
+}
+
+async fn blocking<T: Send + 'static>(
+    f: impl FnOnce() -> AppResult<T> + Send + 'static,
+) -> AppResult<T> {
+    tauri::async_runtime::spawn_blocking(f)
+        .await
+        .map_err(|e| AppError::msg(e.to_string()))?
+}
+
+#[tauri::command]
+pub async fn git_status(state: State<'_, AppState>, project_id: String) -> AppResult<GitStatusDto> {
+    let (git, path) = match repo_target(&state, &project_id) {
+        Ok(v) => v,
+        Err(_) => {
+            return Ok(GitStatusDto {
+                available: true,
+                error: Some("No local folder configured".into()),
+                ..GitStatusDto::default()
+            })
+        }
+    };
+    blocking(move || Ok(crate::git_cache::refresh_now(&git, &path))).await
+}
+
+/// Refreshes the cached status for the given projects (or all tracked repos when empty).
+#[tauri::command]
+pub async fn git_refresh(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    project_ids: Option<Vec<String>>,
+) -> AppResult<Vec<GitStatusUpdate>> {
+    let only = project_ids.filter(|ids| !ids.is_empty());
+    let (git, targets) = state.db.with(|c| {
+        Ok((
+            db::load_settings(c).git_path,
+            crate::git_cache::tracked_targets(c, &state.db.device_id, only.as_deref()),
+        ))
+    })?;
+    blocking(move || Ok(crate::git_cache::refresh_many(&app, &git, targets))).await
+}
+
+#[tauri::command]
+pub async fn git_run(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    project_id: String,
+    action: String,
+    arg: Option<String>,
+) -> AppResult<String> {
+    let (git, path) = repo_target(&state, &project_id)?;
+    let git2 = git.clone();
+    let path2 = path.clone();
+    let out = blocking(move || run_git_action(&git2, &path2, &action, arg.as_deref())).await;
+    // Refresh even on failure: a conflicted pull changes the repo state.
+    let id = project_id.clone();
+    let status = blocking(move || Ok(crate::git_cache::refresh_now(&git, &path))).await?;
+    let _ = tauri::Emitter::emit(
+        &app,
+        crate::git_cache::STATUS_EVENT,
+        GitStatusUpdate {
+            project_id: id,
+            git: status,
+        },
+    );
+    let out = out?;
+    state.db.with(|c| db::evaluate_project(c, &project_id))?;
+    Ok(out)
+}
+
+fn run_git_action(
+    git: &str,
+    path: &std::path::Path,
+    action: &str,
+    arg: Option<&str>,
+) -> AppResult<String> {
+    use crate::git::{has_remote, run_git};
+    match action {
+        "fetch" => run_git(git, path, &["fetch", "--prune"]),
+        "pull" => run_git(git, path, &["pull"]),
+        "push" => {
+            let status = crate::git::status(git, path);
+            if status.upstream.is_none()
+                && status.branch.is_some()
+                && has_remote(git, path, "origin")
+            {
+                run_git(git, path, &["push", "--set-upstream", "origin", "HEAD"])
+            } else {
+                run_git(git, path, &["push"])
+            }
+        }
+        "checkout" => {
+            let branch = arg
+                .map(str::trim)
+                .filter(|b| !b.is_empty() && !b.starts_with('-'));
+            let branch = branch.ok_or_else(|| AppError::msg("Choose a branch"))?;
+            run_git(git, path, &["checkout", branch])
+        }
+        "stash" => run_git(
+            git,
+            path,
+            &[
+                "stash",
+                "push",
+                "--include-untracked",
+                "-m",
+                "BluePhoenix stash",
+            ],
+        ),
+        "stash_pop" => run_git(git, path, &["stash", "pop"]),
+        _ => Err(AppError::msg("Unknown git action")),
+    }
+}
+
+/// Fetches every tracked repo (or the given projects), reporting a result for each.
+#[tauri::command]
+pub async fn git_fetch_all(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    project_ids: Option<Vec<String>>,
+) -> AppResult<Vec<GitOpResult>> {
+    let only = project_ids.filter(|ids| !ids.is_empty());
+    let (git, targets) = state.db.with(|c| {
+        Ok((
+            db::load_settings(c).git_path,
+            crate::git_cache::tracked_targets(c, &state.db.device_id, only.as_deref()),
+        ))
+    })?;
+    blocking(move || {
+        let queue = std::sync::Mutex::new(targets.into_iter());
+        let results = std::sync::Mutex::new(Vec::new());
+        std::thread::scope(|scope| {
+            for _ in 0..4 {
+                scope.spawn(|| loop {
+                    let next = queue.lock().ok().and_then(|mut q| q.next());
+                    let Some((project_id, path)) = next else {
+                        break;
+                    };
+                    let outcome = run_git_action(&git, &path, "fetch", None);
+                    let status = crate::git_cache::refresh_now(&git, &path);
+                    let _ = tauri::Emitter::emit(
+                        &app,
+                        crate::git_cache::STATUS_EVENT,
+                        GitStatusUpdate {
+                            project_id: project_id.clone(),
+                            git: status,
+                        },
+                    );
+                    let (ok, message) = match outcome {
+                        Ok(_) => (true, "Fetched".to_string()),
+                        Err(e) => (false, e.to_string()),
+                    };
+                    if let Ok(mut r) = results.lock() {
+                        r.push(GitOpResult {
+                            project_id,
+                            ok,
+                            message,
+                        });
+                    }
+                });
+            }
+        });
+        Ok(results.into_inner().unwrap_or_default())
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_branches(
+    state: State<'_, AppState>,
+    project_id: String,
+) -> AppResult<Vec<GitBranchDto>> {
+    let (git, path) = repo_target(&state, &project_id)?;
+    blocking(move || crate::git::branches(&git, &path)).await
+}
+
+#[tauri::command]
+pub async fn git_changes(
+    state: State<'_, AppState>,
+    project_id: String,
+) -> AppResult<Vec<GitChangeDto>> {
+    let (git, path) = repo_target(&state, &project_id)?;
+    blocking(move || crate::git::changes(&git, &path)).await
+}
+
+#[tauri::command]
+pub async fn git_log(
+    state: State<'_, AppState>,
+    project_id: String,
+    limit: Option<usize>,
+) -> AppResult<Vec<GitCommitDto>> {
+    let (git, path) = repo_target(&state, &project_id)?;
+    blocking(move || crate::git::log(&git, &path, limit.unwrap_or(30))).await
 }
 
 #[tauri::command]

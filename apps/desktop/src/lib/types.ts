@@ -73,13 +73,43 @@ export type GitStatus = {
   available: boolean;
   isRepo: boolean;
   branch?: string | null;
+  upstream?: string | null;
+  detached: boolean;
   ahead: number;
   behind: number;
   dirty: boolean;
+  changed: number;
+  staged: number;
+  untracked: number;
+  stash: number;
   lastCommit?: string | null;
   lastCommitAt?: string | null;
   error?: string | null;
+  /** True until the first background refresh for this folder finished. */
+  pending: boolean;
+  checkedAt?: string | null;
 };
+
+export type GitStatusUpdate = { projectId: string; git: GitStatus };
+export type GitOpResult = { projectId: string; ok: boolean; message: string };
+export type GitAction = "fetch" | "pull" | "push" | "checkout" | "stash" | "stash_pop";
+export type GitBranch = {
+  name: string;
+  current: boolean;
+  upstream?: string | null;
+  lastCommitAt?: string | null;
+  subject?: string | null;
+};
+export type GitChange = {
+  path: string;
+  originalPath?: string | null;
+  index: string;
+  worktree: string;
+  staged: boolean;
+  untracked: boolean;
+  conflicted: boolean;
+};
+export type GitCommit = { hash: string; shortHash: string; author: string; date: string; subject: string };
 
 export type ProjectCard = {
   id: string;
@@ -123,6 +153,7 @@ export type Settings = {
   gitPath: string;
   vscodePath: string;
   terminal: string;
+  preferredEditor: string;
   shell: string;
   includeFailedGrades: boolean;
   onboardingComplete: boolean;
@@ -296,3 +327,18 @@ export type Caps = CapabilitySet;
 export function hasCap(category: Category | undefined, key: keyof CapabilitySet) {
   return Boolean(category?.capabilities?.[key]);
 }
+
+export type LaunchOption = { id: string; name: string };
+
+export type TerminalSession = {
+  id: string;
+  projectId?: string | null;
+  title: string;
+  command?: string | null;
+  cwd: string;
+  running: boolean;
+  exitCode?: number | null;
+  startedAt: string;
+};
+export type TerminalDataEvent = { id: string; data: string };
+export type TerminalExitEvent = { id: string; code?: number | null };

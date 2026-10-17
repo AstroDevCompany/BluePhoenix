@@ -98,18 +98,75 @@ pub struct AttendanceDto {
     pub seconds: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
 pub struct GitStatusDto {
     pub available: bool,
     pub is_repo: bool,
     pub branch: Option<String>,
+    pub upstream: Option<String>,
+    pub detached: bool,
     pub ahead: i64,
     pub behind: i64,
     pub dirty: bool,
+    /// Tracked files with unstaged modifications (or conflicts).
+    pub changed: i64,
+    pub staged: i64,
+    pub untracked: i64,
+    pub stash: i64,
     pub last_commit: Option<String>,
     pub last_commit_at: Option<String>,
     pub error: Option<String>,
+    /// True until the first background refresh for this folder has finished.
+    pub pending: bool,
+    pub checked_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitBranchDto {
+    pub name: String,
+    pub current: bool,
+    pub upstream: Option<String>,
+    pub last_commit_at: Option<String>,
+    pub subject: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitChangeDto {
+    pub path: String,
+    pub original_path: Option<String>,
+    pub index: String,
+    pub worktree: String,
+    pub staged: bool,
+    pub untracked: bool,
+    pub conflicted: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitCommitDto {
+    pub hash: String,
+    pub short_hash: String,
+    pub author: String,
+    pub date: String,
+    pub subject: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitStatusUpdate {
+    pub project_id: String,
+    pub git: GitStatusDto,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitOpResult {
+    pub project_id: String,
+    pub ok: bool,
+    pub message: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -199,6 +256,8 @@ pub struct AppSettingsDto {
     pub git_path: String,
     pub vscode_path: String,
     pub terminal: String,
+    #[serde(default)]
+    pub preferred_editor: String,
     pub shell: String,
     pub include_failed_grades: bool,
     pub onboarding_complete: bool,

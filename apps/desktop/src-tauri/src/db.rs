@@ -135,6 +135,7 @@ fn seed_settings(conn: &Connection) -> AppResult<()> {
         ("developer.gitPath", ""),
         ("developer.vscodePath", ""),
         ("developer.terminal", "default"),
+        ("developer.editor", ""),
         ("developer.shell", ""),
         ("grading.includeFailed", "false"),
         ("onboarding.complete", "false"),
@@ -337,6 +338,7 @@ pub fn load_settings(conn: &Connection) -> AppSettingsDto {
         git_path: setting(conn, "developer.gitPath", ""),
         vscode_path: setting(conn, "developer.vscodePath", ""),
         terminal: setting(conn, "developer.terminal", "default"),
+        preferred_editor: setting(conn, "developer.editor", ""),
         shell: setting(conn, "developer.shell", ""),
         include_failed_grades: setting(conn, "grading.includeFailed", "false") == "true",
         onboarding_complete: setting(conn, "onboarding.complete", "false") == "true",
@@ -380,6 +382,7 @@ pub fn save_settings(conn: &Connection, settings: &AppSettingsDto) -> AppResult<
     set_setting(conn, "developer.gitPath", &settings.git_path)?;
     set_setting(conn, "developer.vscodePath", &settings.vscode_path)?;
     set_setting(conn, "developer.terminal", &settings.terminal)?;
+    set_setting(conn, "developer.editor", &settings.preferred_editor)?;
     set_setting(conn, "developer.shell", &settings.shell)?;
     set_setting(
         conn,
@@ -806,7 +809,6 @@ pub fn project_card(
     conn: &Connection,
     project_id: &str,
     device_id: &str,
-    git_path: &str,
 ) -> AppResult<ProjectCardDto> {
     let (category_id, name, description, status, favorite, archived, icon, accent, tracked, xp, created_at): (
         String,
@@ -868,7 +870,7 @@ pub fn project_card(
     let git = if kind == CategoryKind::Software {
         local_path
             .as_ref()
-            .map(|p| crate::git::status(git_path, Path::new(p)))
+            .map(|p| crate::git_cache::cached(Path::new(p)))
     } else {
         None
     };
@@ -923,7 +925,6 @@ pub fn list_projects(
     conn: &Connection,
     category_id: &str,
     device_id: &str,
-    git_path: &str,
     include_archived: bool,
 ) -> AppResult<Vec<ProjectCardDto>> {
     let sql = if include_archived {
@@ -937,7 +938,7 @@ pub fn list_projects(
         .filter_map(|r| r.ok())
         .collect();
     ids.into_iter()
-        .map(|id| project_card(conn, &id, device_id, git_path))
+        .map(|id| project_card(conn, &id, device_id))
         .collect()
 }
 
@@ -1026,8 +1027,7 @@ pub fn create_project(
     )?;
     evaluate_project(conn, &id)?;
     evaluate_user(conn)?;
-    let settings = load_settings(conn);
-    project_card(conn, &id, device_id, &settings.git_path)
+    project_card(conn, &id, device_id)
 }
 
 pub fn update_project_fields(
@@ -2760,7 +2760,7 @@ pub fn replace_project_tags(
 }
 
 pub fn project_context(conn: &Connection, project_id: &str) -> AppResult<ProjectContext> {
-    let card = project_card(conn, project_id, &current_device(conn), "")?;
+    let card = project_card(conn, project_id, &current_device(conn))?;
     let caps = caps_for(conn, &card.category_id)?;
     Ok(ProjectContext {
         project_id: card.id,

@@ -8,7 +8,16 @@ import type {
   Category,
   CommandDto,
   CommandOutput,
+  GitAction,
+  GitBranch,
+  GitChange,
+  GitCommit,
+  GitOpResult,
+  GitStatus,
+  GitStatusUpdate,
   GpaDashboard,
+  LaunchOption,
+  TerminalSession,
   LinkDto,
   ProjectCard,
   RunningTimer,
@@ -58,13 +67,36 @@ export const api = {
   upsertCommand: (command: CommandDto) => invoke("upsert_command", { command }),
   deleteCommand: (id: string) => invoke("delete_command", { id }),
   runCommand: (payload: Record<string, unknown>) => invoke<CommandOutput>("run_command", payload),
-  gitStatus: (projectId: string) => invoke("git_status", { projectId }),
-  gitRun: (projectId: string, action: string) => invoke<string>("git_run", { projectId, action }),
+  gitStatus: (projectId: string) => invoke<GitStatus>("git_status", { projectId }),
+  gitRun: (projectId: string, action: GitAction, arg?: string) =>
+    invoke<string>("git_run", { projectId, action, arg }),
+  gitRefresh: (projectIds?: string[]) => invoke<GitStatusUpdate[]>("git_refresh", { projectIds }),
+  gitFetchAll: (projectIds?: string[]) => invoke<GitOpResult[]>("git_fetch_all", { projectIds }),
+  gitBranches: (projectId: string) => invoke<GitBranch[]>("git_branches", { projectId }),
+  gitChanges: (projectId: string) => invoke<GitChange[]>("git_changes", { projectId }),
   openPath: (path: string) => invoke("open_path", { path }),
   revealPath: (path: string) => invoke("reveal_path", { path }),
   openUrl: (url: string) => invoke("open_url", { url }),
   openVscode: (folder: string) => invoke("open_vscode", { folder }),
-  openTerminal: (folder: string) => invoke("open_terminal", { folder }),
+  openInEditor: (folder: string, editor?: string) => invoke("open_in_editor", { folder, editor }),
+  listEditors: () => invoke<LaunchOption[]>("list_editors"),
+  listTerminals: () => invoke<LaunchOption[]>("list_terminals"),
+  openTerminal: (folder: string, opts?: { command?: string; terminal?: string; confirmed?: boolean }) =>
+    invoke("open_terminal", { folder, ...opts }),
+  termSpawn: (opts: {
+    projectId?: string;
+    commandId?: string;
+    command?: string;
+    cols?: number;
+    rows?: number;
+    confirmed?: boolean;
+  }) => invoke<TerminalSession>("term_spawn", opts),
+  termWrite: (id: string, data: string) => invoke<void>("term_write", { id, data }),
+  termResize: (id: string, cols: number, rows: number) => invoke<void>("term_resize", { id, cols, rows }),
+  termKill: (id: string) => invoke<void>("term_kill", { id }),
+  termClose: (id: string) => invoke<void>("term_close", { id }),
+  termList: () => invoke<TerminalSession[]>("term_list"),
+  termBacklog: (id: string) => invoke<string>("term_backlog", { id }),
   pickFolder: () => invoke<string | null>("pick_folder"),
   pickFile: () => invoke<string | null>("pick_file"),
   pickGgufFile: () => invoke<string | null>("pick_gguf_file"),
@@ -147,7 +179,7 @@ export const api = {
       }[];
       fallbackUsed?: boolean;
     }>("ai_scan_commands", { projectId }),
-  gitLog: (projectId: string) => invoke<string[]>("git_log", { projectId }),
+  gitLog: (projectId: string, limit?: number) => invoke<GitCommit[]>("git_log", { projectId, limit }),
   gitDiff: (projectId: string) => invoke("git_diff", { projectId }),
   listDocumentRecords: (projectId: string) => invoke("list_document_records", { projectId }),
   exportData: () => invoke("export_data"),
