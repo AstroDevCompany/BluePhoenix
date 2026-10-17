@@ -1,0 +1,186 @@
+/* Embedded terminal dock and the shell grid it extends. */
+
+/* ---------- Terminal dock ---------- */
+.shell {
+  grid-template-rows: var(--titlebar-h) minmax(0, 1fr) auto;
+  grid-template-areas:
+    "title title title"
+    "nav main chat"
+    "nav dock chat";
+}
+
+.shell.onboard {
+  grid-template-rows: var(--titlebar-h) minmax(0, 1fr);
+  grid-template-areas:
+    "title"
+    "main";
+}
+
+.sidebar {
+  grid-row: 2 / 4;
+}
+
+.ai-rail {
+  grid-row: 2 / 4;
+}
+
+.term-dock {
+  grid-area: dock;
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-top: 1px solid var(--border-strong);
+  background: rgba(4, 10, 16, 0.72);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+
+.term-resize {
+  position: absolute;
+  top: -4px;
+  left: 0;
+  right: 0;
+  height: 8px;
+  cursor: row-resize;
+  z-index: 2;
+  touch-action: none;
+}
+
+.term-resize:hover {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.term-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 36px;
+  padding: 0 var(--space-2);
+}
+
+.term-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.term-tab {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  flex: 0 0 auto;
+}
+
+.term-tab.active {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--border-strong);
+}
+
+.term-tab-main {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 220px;
+  height: 28px;
+  padding: 0 var(--space-2) 0 var(--space-3);
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.term-tab.active .term-tab-main {
+  color: var(--text);
+}
+
+.term-tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.term-exit {
+  font-size: 11px;
+  color: var(--danger);
+}
+
+.term-tab-close,
+.term-new {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+
+.term-tab-close:hover,
+.term-new:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+
+.term-status {
+  width: 7px;
+  height: 7px;
+  border-radius: 99px;
+  background: var(--text-faint);
+  flex: 0 0 auto;
+}
+
+.term-status[data-state="running"] {
+  background: var(--success);
+  animation: timer-pulse 1.6s ease-in-out infinite;
+}
+
+.term-status[data-state="failed"] {
+  background: var(--danger);
+}
+
+.term-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: 0 0 auto;
+}
+
+.term-btn {
+  height: 26px;
+  padding: 0 var(--space-2);
+  font-size: 12px;
+  gap: 6px;
+}
+
+.term-meta {
+  font-size: 11px;
+  padding: 0 var(--space-2);
+}
+
+.term-body {
+  flex: 1;
+  min-height: 0;
+  padding: 0 var(--space-3) var(--space-2);
+}
+
+.term-view {
+  height: 100%;
+}
+
+.term-view .xterm {
+  height: 100%;
+}
+
+.term-view .xterm-viewport {
+  background: transparent !important;
+}

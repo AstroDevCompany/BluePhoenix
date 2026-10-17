@@ -87,9 +87,9 @@ export function SoftwareAiActions({
         })}>Scan commands</button>
       </div>
       {busy ? <p className="muted" aria-live="polite">{busy}…</p> : null}
-      {summary ? <p className="glass-panel" style={{ padding: 12, marginTop: 12 }}>{summary}</p> : null}
+      {summary ? <p className="glass-panel ai-result">{summary}</p> : null}
       {prompt ? (
-        <div className="glass-panel" style={{ padding: 12, marginTop: 12 }}>
+        <div className="glass-panel ai-result">
           <p className="muted">Known</p>
           <ul>{prompt.known.map((k) => <li key={k}>{k}</li>)}</ul>
           <p className="muted">Assumptions</p>
@@ -99,7 +99,7 @@ export function SoftwareAiActions({
         </div>
       ) : null}
       {draft ? (
-        <div className="glass-panel" style={{ padding: 12, marginTop: 12 }}>
+        <div className="glass-panel ai-result">
           <input className="input" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
           <textarea className="textarea" value={draft.body} onChange={(e) => setDraft({ ...draft, body: e.target.value })} />
           <button className="btn primary" type="button" onClick={() => {
@@ -110,9 +110,9 @@ export function SoftwareAiActions({
         </div>
       ) : null}
       {todos.length ? (
-        <div className="glass-panel" style={{ padding: 12, marginTop: 12 }}>
+        <div className="glass-panel ai-result">
           {todos.map((t, i) => (
-            <label key={i} className="row" style={{ margin: "6px 0" }}>
+            <label key={i} className="row ai-option">
               <input type="checkbox" checked={Boolean(picked[i])} onChange={(e) => setPicked((s) => ({ ...s, [i]: e.target.checked }))} />
               <span><b>{t.title}</b> · {t.priority}<br /><span className="muted">{t.reasoning}</span></span>
             </label>
@@ -131,9 +131,9 @@ export function SoftwareAiActions({
         </div>
       ) : null}
       {commandScan.length ? (
-        <div className="glass-panel" style={{ padding: 12, marginTop: 12 }}>
+        <div className="glass-panel ai-result">
           {commandScan.map((c, i) => (
-            <label key={`${c.command}-${i}`} className="row" style={{ margin: "6px 0" }}>
+            <label key={`${c.command}-${i}`} className="row ai-option">
               <input type="checkbox" checked={Boolean(pickedCommands[i])} onChange={(e) => setPickedCommands((s) => ({ ...s, [i]: e.target.checked }))} />
               <span>
                 <b>{c.name}</b> · {c.source === "found" ? "Found" : "Hypothesized"}
@@ -171,7 +171,7 @@ export function SoftwareAiActions({
         </div>
       ) : null}
       {commit ? (
-        <div className="row" style={{ marginTop: 12 }}>
+        <div className="row mt-3">
           <input className="input" readOnly value={commit} />
           <button className="btn" type="button" onClick={() => void navigator.clipboard.writeText(commit).then(() => toast("Copied — nothing was committed"))}>Copy</button>
         </div>

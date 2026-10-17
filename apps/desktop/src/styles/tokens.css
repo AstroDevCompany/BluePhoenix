@@ -1,0 +1,79 @@
+:root {
+  --font-sans: "Poppins", system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  --bg-0: #050b14;
+  --bg-1: #071525;
+  --bg-2: #06201f;
+  --bg-3: #061a1f;
+  --card-a: rgba(36, 150, 110, 0.32);
+  --card-b: rgba(6, 22, 18, 0.92);
+  --glass-weak: rgba(4, 14, 16, 0.5);
+  --glass: rgba(8, 24, 22, 0.78);
+  --glass-strong: rgba(6, 16, 18, 0.88);
+  --glass-menu: rgba(8, 20, 22, 0.94);
+  --glass-blur: blur(28px) saturate(160%);
+  --glass-blur-strong: blur(36px) saturate(180%);
+  --glass-blur-control: blur(18px) saturate(160%);
+  --text: #e8f4f2;
+  --text-muted: #b4c8cc;
+  --text-faint: #8aa3a8;
+  --accent: #3dd6c6;
+  --accent-hover: #5ee4d4;
+  --accent-ink: #04211c;
+  --accent-2: #5ec8e8;
+  --workspace: var(--accent);
+  --border: rgba(170, 240, 210, 0.1);
+  --border-strong: rgba(180, 255, 220, 0.16);
+  --border-glow: rgba(140, 255, 210, 0.32);
+  --rim-hi: rgba(210, 255, 235, 0.42);
+  --rim-lo: rgba(70, 140, 120, 0.12);
+  --shadow: 0 16px 40px rgba(0, 0, 0, 0.36), 0 0 24px rgba(40, 160, 120, 0.1);
+  --shadow-hover: 0 20px 52px rgba(0, 0, 0, 0.4), 0 0 36px rgba(50, 190, 140, 0.2);
+  --shadow-sm: 0 8px 20px rgba(0, 0, 0, 0.22);
+  --radius-sm: 14px;
+  --radius-md: 18px;
+  --radius-lg: 28px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+  --control-h: 38px;
+  --titlebar-h: 40px;
+  --sidebar-w: 248px;
+  --duration-fast: 180ms;
+  --duration-med: 320ms;
+  --duration-slow: 500ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-micro: var(--duration-fast);
+  --duration-panel: var(--duration-med);
+  --ease: var(--ease-out);
+  --focus: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
+  --z-tooltip: 1000;
+  --success: #4ade80;
+  --danger: #f87171;
+  --warning: #fbbf24;
+  --info: #67e8f9;
+  color-scheme: dark;
+}
+
+html[data-accent="cyan"] {
+  --accent: #3dd6c6;
+  --accent-hover: #7ee8ea;
+  --accent-ink: #04211c;
+}
+
+html[data-accent="teal"] {
+  --accent: #12b89a;
+  --accent-hover: #2dd4b8;
+  --accent-ink: #03201a;
+}
+
+@property --ai-rail-w {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}

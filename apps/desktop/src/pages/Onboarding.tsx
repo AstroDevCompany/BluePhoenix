@@ -40,12 +40,12 @@ export function Onboarding({
       </div>
       <p className="faint">{STEPS[step]} · {step + 1}/{STEPS.length}</p>
       {step === 0 ? (
-        <div className="glass-panel settings-card" style={{ marginTop: 20 }}>
+        <div className="glass-panel settings-card mt-5">
           <h2 className="h2">Account</h2>
           <p className="muted">Create an account to sync later, or continue locally.</p>
           <label className="field"><span className="label">Email</span><input className="input" value={email} onChange={(e) => setEmail(e.target.value)} /></label>
           <label className="field"><span className="label">Password</span><input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
-          <div className="row" style={{ justifyContent: "flex-end" }}>
+          <div className="row actions-end">
             <button className="btn" type="button" onClick={async () => {
               try {
                 await api.authRegister(email, password);
@@ -69,7 +69,7 @@ export function Onboarding({
         </div>
       ) : null}
       {step === 1 ? (
-        <div className="glass-panel settings-card" style={{ marginTop: 20 }}>
+        <div className="glass-panel settings-card mt-5">
           <h2 className="h2">Workspace</h2>
           <div className="choice-list">
           {bootstrap.categories.map((c: Category) => (
@@ -79,20 +79,20 @@ export function Onboarding({
             </label>
           ))}
           </div>
-          <div className="row" style={{ justifyContent: "flex-end" }}>
+          <div className="row actions-end">
             <button className="btn primary" type="button" onClick={async () => { await saveEnabled(); setStep(2); }}>Continue</button>
           </div>
         </div>
       ) : null}
       {step === 2 ? (
-        <div className="glass-panel settings-card" style={{ marginTop: 20 }}>
+        <div className="glass-panel settings-card mt-5">
           <h2 className="h2">Default workspace</h2>
           <Select
             value={workspace}
             onChange={setWorkspace}
             options={bootstrap.categories.filter((c) => enabled[c.id]).map((c) => ({ value: c.id, label: c.name }))}
           />
-          <div className="row" style={{ justifyContent: "flex-end", marginTop: 16 }}>
+          <div className="row actions-end">
             <button className="btn primary" type="button" onClick={() => setStep(3)}>Continue</button>
           </div>
         </div>
@@ -129,13 +129,13 @@ function FirstItem({
   const [name, setName] = useState("");
   const toast = useUi((s) => s.showToast);
   return (
-    <div className="glass-panel settings-card" style={{ marginTop: 20 }}>
+    <div className="glass-panel settings-card mt-5">
       <h2 className="h2">First {categoryName.toLowerCase()}</h2>
       <p className="muted">Optional. You can skip and create it later from the home screen.</p>
       <label className="field"><span className="label">Name</span>
         <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
       </label>
-      <div className="row" style={{ justifyContent: "flex-end", marginTop: 16 }}>
+      <div className="row actions-end">
         <button className="btn" type="button" onClick={() => void onSkip()}>Skip for now</button>
         <button className="btn primary" type="button" disabled={!name.trim()} onClick={async () => {
           try {

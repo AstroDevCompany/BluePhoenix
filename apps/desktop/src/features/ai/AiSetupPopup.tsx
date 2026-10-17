@@ -34,7 +34,7 @@ export function AiSetupPopup() {
           <span className="label">OpenRouter API key</span>
           <input className="input" type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="sk-or-…" />
         </label>
-        <div className="row" style={{ justifyContent: "flex-end", marginTop: 16 }}>
+        <div className="row actions-end">
           <button className="btn" type="button" onClick={() => void dismiss()}>Skip for now</button>
           <button className="btn primary" type="button" onClick={async () => {
             try {

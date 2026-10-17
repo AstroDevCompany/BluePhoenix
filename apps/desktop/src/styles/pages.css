@@ -1,0 +1,251 @@
+.settings-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--border);
+  width: fit-content;
+  max-width: 100%;
+  margin: 20px 0 28px;
+}
+
+.settings-tabs button {
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.settings-tabs button[aria-selected="true"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.onboard-flow {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.onboard-steps {
+  display: flex;
+  gap: 8px;
+  margin: 16px 0 24px;
+}
+
+.onboard-steps span {
+  height: 4px;
+  flex: 1;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.onboard-steps span.is-done {
+  background: var(--accent);
+  opacity: 0.4;
+}
+
+.onboard-steps span.is-current {
+  background: var(--accent);
+}
+
+.detail-page {
+  min-height: 100%;
+}
+
+.detail-head {
+  padding-bottom: var(--space-3);
+}
+
+.detail-head .h1 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.detail-head-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.detail-head-actions {
+  justify-content: flex-end;
+}
+
+.detail-head-actions .select-root {
+  width: 180px;
+  flex: 0 0 180px;
+}
+
+.detail-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin: var(--space-3) 0 0;
+}
+
+.detail-tabs button {
+  height: auto;
+  padding: 4px 0;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  color: var(--text-faint);
+  border-radius: 0;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.detail-tabs button[aria-selected="true"] {
+  background: transparent;
+  border-bottom-color: var(--text);
+  color: var(--text);
+  box-shadow: none;
+}
+
+.detail-stage {
+  padding: var(--space-6) 0 var(--space-8);
+}
+
+.detail-hero {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  margin: 0 0 var(--space-5);
+}
+
+.detail-lede {
+  margin: calc(var(--space-5) * -1) 0 var(--space-6);
+}
+
+.detail-pane.page-enter {
+  animation: detail-in var(--duration-med) var(--ease-out);
+}
+
+@keyframes detail-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+.detail-overview {
+  display: flex;
+  flex-direction: column;
+}
+
+.detail-section {
+  padding: var(--space-6) 0;
+  border-top: 1px solid var(--border);
+}
+
+.detail-section:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.detail-section-title {
+  margin: 0 0 var(--space-4);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  font-weight: 600;
+}
+
+.detail-section .muted {
+  margin: 0 0 var(--space-3);
+}
+
+.metric-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6) var(--space-8);
+}
+
+.metric span {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  font-weight: 500;
+}
+
+.metric b {
+  display: block;
+  margin-top: 4px;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.add-disclosure {
+  margin-top: var(--space-4);
+}
+
+.add-disclosure summary.btn {
+  display: inline-flex;
+  width: fit-content;
+  list-style: none;
+}
+
+.add-disclosure summary::-webkit-details-marker {
+  display: none;
+}
+
+.add-disclosure-body {
+  margin-top: var(--space-3);
+  padding: var(--space-4);
+}
+
+.ai-actions-card {
+  padding: var(--space-5);
+}
+
+.project-card-head {
+  flex-shrink: 0;
+  align-items: center;
+}
+
+.provider-switch {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.local-model-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.local-model-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.local-model-row.is-active {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+
+.local-model-path {
+  word-break: break-all;
+  font-size: 12px;
+}
+
+.danger-text {
+  color: #ff8d8d;
+}

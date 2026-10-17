@@ -3,6 +3,7 @@ import type { TimeEntry } from "../../lib/types";
 import { api, formatError } from "../../lib/ipc";
 import { formatDate, formatDuration } from "../../lib/format";
 import { useUi } from "../../stores/ui";
+import { EmptyState } from "../../components/ui/EmptyState";
 
 const MINUTE_PRESETS = [
   { label: "10 min", seconds: 10 * 60 },
@@ -137,10 +138,7 @@ export function TimeEntries({
         </div>
       </section>
       {rows.length === 0 ? (
-        <div className="detail-empty">
-          <p className="detail-empty-title">No entries yet</p>
-          <p className="muted">Start the timer or add time above.</p>
-        </div>
+        <EmptyState compact title="No entries yet" body="Start the timer or add time above." />
       ) : (
         rows.slice(0, 40).map((row) => (
           <div key={row.id} className="list-row spread">

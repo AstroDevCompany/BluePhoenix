@@ -101,7 +101,7 @@ export function CreateProjectDialog({
     >
       <div className="dialog" role="dialog" aria-modal="true">
         <h2 className="h2">What are you creating?</h2>
-        <div className="row" style={{ marginBottom: 16 }}>
+        <div className="row mb-4">
           {enabled.map((c) => (
             <button key={c.id} className={`btn ${c.id === category?.id ? "primary" : ""}`} type="button" onClick={() => setCategoryId(c.id)}>
               {c.name}
@@ -168,7 +168,7 @@ export function CreateProjectDialog({
           </>
         ) : null}
         {fields !== "software" ? <PathField label="Primary file" value={primaryFile} onChange={setPrimaryFile} /> : null}
-        <div className="row" style={{ justifyContent: "flex-end", marginTop: 8 }}>
+        <div className="row actions-end">
           <button className="btn ghost" type="button" onClick={onClose}>Cancel</button>
           <button className="btn primary" type="button" disabled={busy || filling || !name.trim()} onClick={() => void submit()}>Create</button>
         </div>
@@ -195,7 +195,7 @@ function PathField({
     <label className="field">
       <span className="label">{label}</span>
       <div className="row">
-        <input className="input" value={value} onChange={(e) => onChange(e.target.value)} style={{ flex: 1 }} />
+        <input className="input grow" value={value} onChange={(e) => onChange(e.target.value)} />
         <button className="btn" type="button" onClick={async () => {
           try {
             const picked = folder ? await api.pickFolder() : await api.pickFile();

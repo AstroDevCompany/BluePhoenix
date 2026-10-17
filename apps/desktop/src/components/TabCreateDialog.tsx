@@ -130,7 +130,7 @@ export function TabCreateDialog({
             ) : null}
           </>
         )}
-        <div className="row" style={{ justifyContent: "flex-end", marginTop: 8 }}>
+        <div className="row actions-end">
           <button className="btn ghost" type="button" onClick={onClose}>Cancel</button>
           {projects.length > 0 ? (
             <button className="btn primary" type="button" disabled={busy || !canSave} onClick={() => void submit()}>

@@ -37,8 +37,8 @@ function TerminalView({ session, active }: { session: TerminalSession; active: b
       allowTransparency: true,
       theme: {
         background: "rgba(0,0,0,0)",
-        foreground: cssVar("--text", "#e8f4f2"),
-        cursor: cssVar("--accent", "#3dd6c6"),
+        foreground: "#e8f4f2",
+        cursor: "#3dd6c6",
         selectionBackground: "rgba(61, 214, 198, 0.28)",
       },
     });

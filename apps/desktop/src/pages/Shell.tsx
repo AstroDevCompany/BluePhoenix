@@ -300,7 +300,7 @@ export function RootChrome() {
           <div className="dialog">
             <h2 className="h2">{confirm.title}</h2>
             <p className="muted">{confirm.body}</p>
-            <div className="row" style={{ justifyContent: "flex-end" }}>
+            <div className="row actions-end">
               <button className="btn" type="button" onClick={closeConfirm}>Cancel</button>
               <button className={`btn ${confirm.danger ? "danger" : "primary"}`} type="button" onClick={() => { confirm.onConfirm(); closeConfirm(); }}>Confirm</button>
             </div>

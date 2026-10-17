@@ -1,6 +1,7 @@
 import type { Category, Todo } from "../../lib/types";
 import { useTodos, useToggleTodo } from "../../lib/queries";
 import { ErrorNote } from "../../components/ui/ErrorNote";
+import { SkeletonRows } from "../../components/ui/Skeleton";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { PageHeader } from "../../components/PageHeader";
 import { VirtualList } from "../../components/ui/VirtualList";
@@ -36,7 +37,7 @@ export function TodosPage({ category }: { category: Category }) {
       {todosQuery.isError ? (
         <ErrorNote error={todosQuery.error} onRetry={() => void todosQuery.refetch()} />
       ) : todosQuery.isPending ? (
-        <p className="muted">Loading…</p>
+        <SkeletonRows />
       ) : todos.length === 0 ? (
         <EmptyState title="Inbox is empty" body={`TODOs from ${category.terminology.itemPlural.toLowerCase()} appear here.`} />
       ) : todos.length > 24 ? (

@@ -21,7 +21,7 @@ export function WorkspaceSwitcher({
           <ChevronsUpDown size={14} className="muted" aria-hidden />
         </button>
       </MenuTrigger>
-      <MenuContent className="workspace-menu" style={{ minWidth: "var(--radix-dropdown-menu-trigger-width)" }}>
+      <MenuContent className="workspace-menu">
         {categories.map((c, i) => (
           <MenuItem
             key={c.id}

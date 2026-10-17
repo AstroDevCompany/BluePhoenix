@@ -5,6 +5,7 @@ import { api, formatError } from "../../../lib/ipc";
 import { useUi } from "../../../stores/ui";
 import { RunButton } from "../ProjectActions";
 import { IconButton } from "../../../components/ui/Tooltip";
+import { EmptyState } from "../../../components/ui/EmptyState";
 
 function CommandForm({
   initial,
@@ -75,10 +76,11 @@ export function CommandsTab({
   return (
     <div className="commands-tab">
       {commands.length === 0 && !adding ? (
-        <div className="detail-empty">
-          <p className="detail-empty-title">No commands yet</p>
-          <p className="muted">Save the commands you run all the time. The pinned one gets a Run button on the project card. The AI tab can scan the project for scripts.</p>
-        </div>
+        <EmptyState
+          compact
+          title="No commands yet"
+          body="Save the commands you run all the time. The pinned one gets a Run button on the project card. The AI tab can scan the project for scripts."
+        />
       ) : null}
       {commands.map((c) =>
         editing === c.id ? (

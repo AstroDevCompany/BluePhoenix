@@ -1,6 +1,7 @@
 import type { Category } from "../../lib/types";
 import { useProjects } from "../../lib/queries";
 import { ErrorNote } from "../../components/ui/ErrorNote";
+import { SkeletonRows } from "../../components/ui/Skeleton";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { PageHeader } from "../../components/PageHeader";
 import { RunButton } from "../projects/ProjectActions";
@@ -14,7 +15,7 @@ export function CommandsPage({ category }: { category: Category }) {
       {projectsQuery.isError ? (
         <ErrorNote error={projectsQuery.error} onRetry={() => void projectsQuery.refetch()} />
       ) : projectsQuery.isPending ? (
-        <p className="muted">Loading…</p>
+        <SkeletonRows />
       ) : pinned.length === 0 ? (
         <EmptyState title="No pinned commands" body="Pin a command on a software project (Commands tab) to run it from here." />
       ) : (

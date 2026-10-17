@@ -7,6 +7,7 @@ import { formatRelative } from "../../../lib/format";
 import { runGit } from "../../../lib/projectActions";
 import { Menu, MenuContent, MenuItem, MenuTrigger } from "../../../components/ui/Menu";
 import { GitSummary } from "../GitSummary";
+import { EmptyState } from "../../../components/ui/EmptyState";
 
 const gitKeys = {
   branches: (id: string) => ["git", "branches", id] as const,
@@ -50,10 +51,11 @@ export function GitTab({ project }: { project: ProjectCard }) {
   if (!git || git.pending) return <p className="muted">Checking repository…</p>;
   if (!git.isRepo) {
     return (
-      <div className="detail-empty">
-        <p className="detail-empty-title">Not a git repository</p>
-        <p className="muted">{git.error ?? "Link a project folder that contains a .git directory to see branches and history."}</p>
-      </div>
+      <EmptyState
+        compact
+        title="Not a git repository"
+        body={git.error ?? "Link a project folder that contains a .git directory to see branches and history."}
+      />
     );
   }
 

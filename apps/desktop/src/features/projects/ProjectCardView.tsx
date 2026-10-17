@@ -161,16 +161,16 @@ function UniversityBody({ project }: { project: ProjectCard; category: Category;
   const toast = useUi((s) => s.showToast);
   return (
     <>
-      <div className="row muted" style={{ fontSize: 12, justifyContent: "space-between" }}>
+      <div className="row muted text-sm spread">
         <span>{formatDuration(project.totalTrackedSeconds)} study</span>
         {project.cfu != null ? <span>{project.cfu} CFU</span> : null}
       </div>
       {project.attendance ? (
-        <div className="muted" style={{ fontSize: 12 }}>
+        <div className="muted text-sm">
           {project.attendance.lessons} lessons · {project.attendance.attended} attended · {project.attendance.percent.toFixed(1)}%
         </div>
       ) : null}
-      <div className="row muted" style={{ fontSize: 12 }}>
+      <div className="row muted text-sm">
         {project.averageGrade != null ? <span>Average {project.averageGrade.toFixed(1)}/30</span> : null}
         {project.finalGrade != null ? <span>Final {project.finalGrade}/30{project.honors ? " with honors" : ""}</span> : null}
       </div>
@@ -194,7 +194,7 @@ function GenericBody({ project }: { project: ProjectCard; category: Category; on
   const toast = useUi((s) => s.showToast);
   return (
     <>
-      <div className="muted" style={{ fontSize: 12 }}>{formatDuration(project.totalTrackedSeconds)}</div>
+      <div className="muted text-sm">{formatDuration(project.totalTrackedSeconds)}</div>
       <div className="row" onClick={(e) => e.stopPropagation()}>
         {project.localPath ? (
           <button className="btn" type="button" onClick={() => api.openPath(project.localPath!).catch((e) => toast(formatError(e), "error"))}>

@@ -10,6 +10,7 @@ import { ExamsPage } from "../features/university/ExamsPage";
 import { KindDashboard } from "../features/workspaces/registry";
 import { EmptyState } from "../components/ui/EmptyState";
 import { ErrorNote } from "../components/ui/ErrorNote";
+import { SkeletonCards } from "../components/ui/Skeleton";
 import { PageHeader } from "../components/PageHeader";
 import { ProjectsToolbar } from "../features/projects/ProjectsToolbar";
 import { applyView, useProjectView } from "../features/projects/projectView";
@@ -64,7 +65,7 @@ function Overview({
     <div>
       <PageHeader title={category.name} kicker={category.terminology.itemPlural} />
       {projects.isError ? <ErrorNote error={projects.error} onRetry={() => void projects.refetch()} /> : null}
-      {projects.isPending ? <p className="muted">Loading…</p> : null}
+      {projects.isPending ? <SkeletonCards count={3} /> : null}
       {projects.isSuccess ? <KindDashboard category={category} projects={list} gpa={dash.data ?? null} onOpenProject={onOpen} /> : null}
       <div className="section">
         <h2 className="h2">{category.kind === "software" ? "Jump back in" : category.terminology.itemPlural}</h2>
@@ -109,7 +110,7 @@ function ItemsPage({
       {projects.isError ? (
         <ErrorNote error={projects.error} onRetry={() => void projects.refetch()} />
       ) : projects.isPending ? (
-        <p className="muted">Loading…</p>
+        <SkeletonCards />
       ) : list.length === 0 ? (
         <EmptyState title="Nothing here yet" body={`This list is only ${category.terminology.itemPlural.toLowerCase()} in ${category.name}.`} action={{ label: `New ${category.terminology.itemSingular}`, onClick: onCreate }} />
       ) : (

@@ -1,0 +1,149 @@
+html[data-os="windows"] .sidebar,
+html[data-os="windows"] .titlebar,
+html[data-os="windows"] .dialog,
+html[data-os="windows"] .palette,
+html[data-os="windows"] .toast,
+html[data-os="windows"] .select-menu,
+html[data-os="windows"] .achievement-tip,
+html[data-os="windows"] .ui-tooltip,
+html[data-os="windows"] .ai-rail {
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+}
+
+html[data-os="windows"] .sidebar,
+html[data-os="windows"] .titlebar {
+  background: rgba(8, 16, 24, 0.78);
+}
+
+html[data-os="windows"] .select-menu,
+html[data-os="windows"] .achievement-tip,
+html[data-os="windows"] .ui-tooltip,
+html[data-os="windows"] .dialog,
+html[data-os="windows"] .palette,
+html[data-os="windows"] .toast {
+  background: rgba(8, 18, 28, 0.86);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .sidebar,
+  .titlebar,
+  .glass-panel,
+  .project-card,
+  .btn,
+  .select-trigger,
+  .workspace-switch,
+  .dialog,
+  .palette,
+  .toast,
+  .select-menu,
+  .achievement-tip,
+  .ui-tooltip,
+  .stat,
+  .ai-rail {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .sidebar,
+  .titlebar,
+  .dialog,
+  .palette,
+  .toast,
+  .select-menu,
+  .achievement-tip,
+  .ui-tooltip,
+  .ai-rail {
+    background: rgba(8, 16, 24, 0.94);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-atmosphere::after,
+  .rainbow-text,
+  .grid-cards > *,
+  .overlay,
+  .dialog,
+  .toast,
+  .menu-pop,
+  .achievement-tip,
+  .ui-tooltip,
+  .page-enter {
+    animation: none !important;
+  }
+
+  .rainbow-text {
+    background-position: 40% 0;
+  }
+
+  .project-card:hover,
+  .project-card:active,
+  .btn:hover,
+  .btn:active,
+  .stat:hover,
+  .nav-btn:hover,
+  .nav-btn:active,
+  .select-trigger:hover,
+  .workspace-switch:hover,
+  .workspace-switch:active,
+  .palette-item:hover,
+  .palette-item.active,
+  .select-option:hover,
+  .select-option.active {
+    transform: none;
+  }
+
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
+html[data-reduced-motion="true"] .app-atmosphere::after,
+html[data-reduced-motion="true"] .rainbow-text,
+html[data-reduced-motion="true"] .grid-cards > *,
+html[data-reduced-motion="true"] .overlay,
+html[data-reduced-motion="true"] .dialog,
+html[data-reduced-motion="true"] .toast,
+html[data-reduced-motion="true"] .menu-pop,
+html[data-reduced-motion="true"] .achievement-tip,
+html[data-reduced-motion="true"] .ui-tooltip,
+html[data-reduced-motion="true"] .page-enter {
+  animation: none !important;
+}
+
+html[data-reduced-motion="true"] .rainbow-text {
+  background-position: 40% 0;
+}
+
+html[data-reduced-motion="true"] *,
+html[data-reduced-motion="true"] *::before,
+html[data-reduced-motion="true"] *::after {
+  transition-property: color, background-color, border-color, opacity, box-shadow !important;
+  transition-duration: 80ms !important;
+  transition-timing-function: ease !important;
+}
+
+html[data-reduced-motion="true"] .project-card:hover,
+html[data-reduced-motion="true"] .project-card:active,
+html[data-reduced-motion="true"] .btn:hover,
+html[data-reduced-motion="true"] .btn:active,
+html[data-reduced-motion="true"] .stat:hover,
+html[data-reduced-motion="true"] .nav-btn:hover,
+html[data-reduced-motion="true"] .nav-btn:active,
+html[data-reduced-motion="true"] .select-trigger:hover,
+html[data-reduced-motion="true"] .workspace-switch:hover,
+html[data-reduced-motion="true"] .workspace-switch:active,
+html[data-reduced-motion="true"] .palette-item:hover,
+html[data-reduced-motion="true"] .palette-item.active,
+html[data-reduced-motion="true"] .select-option:hover,
+html[data-reduced-motion="true"] .select-option.active {
+  transform: none;
+}
+
+html[data-reduced-motion="true"]::view-transition-group(*),
+html[data-reduced-motion="true"]::view-transition-old(*),
+html[data-reduced-motion="true"]::view-transition-new(*) {
+  animation: none !important;
+}

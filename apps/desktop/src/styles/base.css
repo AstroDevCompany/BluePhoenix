@@ -1,0 +1,132 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  font-family: var(--font-sans);
+  background: var(--bg-0);
+  color: var(--text);
+  letter-spacing: 0.01em;
+}
+
+body {
+  overflow: hidden;
+}
+
+button,
+input,
+textarea,
+select {
+  font-family: inherit;
+}
+
+button,
+.btn,
+.select-trigger,
+.workspace-switch {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+.ai-composer-input:focus,
+.ai-composer-input:focus-visible,
+.ai-composer-box:focus-within {
+  outline: none;
+  box-shadow: none;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: 99px;
+  background: linear-gradient(180deg, var(--accent-hover) 0%, var(--accent) 48%, color-mix(in srgb, var(--accent) 55%, #0a3a34) 100%);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 40%, white) 0%, var(--accent-hover) 50%, var(--accent) 100%);
+}
+
+.app-atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(1200px 700px at 12% -10%, color-mix(in srgb, var(--workspace) 28%, transparent), transparent 55%),
+    radial-gradient(900px 600px at 90% 10%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 50%),
+    linear-gradient(160deg, #050b14 0%, #071525 42%, #06201f 72%, #06141c 100%);
+}
+
+.app-atmosphere::after {
+  content: "";
+  position: absolute;
+  inset: -12%;
+  background: radial-gradient(circle at 70% 78%, color-mix(in srgb, var(--workspace) 16%, transparent), transparent 46%);
+  animation: atmosphere-breathe 64s ease-in-out infinite;
+}
+
+@keyframes atmosphere-breathe {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* Numbers line up in tables, stats and counters; code-like text uses the mono face. */
+.stat b,
+.metric b,
+.badge,
+.tag,
+.chip-count,
+.list-row-meta,
+.kbd,
+.git-chip,
+.project-card-stats,
+.dash-todo-project,
+.week-bar-label {
+  font-variant-numeric: tabular-nums;
+}
+
+code,
+pre,
+kbd,
+.mono {
+  font-family: var(--font-mono);
+}
+
+/* Small layout utilities replacing one-off inline styles. */
+.row.spread { justify-content: space-between; }
+.row.actions-end { justify-content: flex-end; margin-top: var(--space-4); }
+.grow { flex: 1; min-width: 0; }
+.mt-2 { margin-top: var(--space-2); }
+.mt-3 { margin-top: var(--space-3); }
+.mt-5 { margin-top: var(--space-5); }
+.mb-4 { margin-bottom: var(--space-4); }
+.text-sm { font-size: 12px; }
+.text-xs { font-size: 11px; }

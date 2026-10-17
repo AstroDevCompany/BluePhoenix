@@ -27,7 +27,7 @@ export function ShortcutSheet() {
             ))}
           </section>
         ))}
-        <div className="row" style={{ justifyContent: "flex-end" }}>
+        <div className="row actions-end">
           <button className="btn" type="button" onClick={() => setOpen(false)}>Close</button>
         </div>
       </div>

@@ -196,12 +196,12 @@ export function AiChatPanel({ projectId }: { projectId?: string }) {
           {messages.map((m) => (
             <div key={m.id} className={`ai-bubble ${m.role}`}>
               {m.role === "assistant" ? <MarkdownMessage text={visibleAssistantText(m.content)} /> : m.content}
-              {m.role === "assistant" && m.fallbackUsed ? <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>Served by fallback {m.model}</div> : null}
+              {m.role === "assistant" && m.fallbackUsed ? <div className="muted text-sm mt-2">Served by fallback {m.model}</div> : null}
             </div>
           ))}
           {busy && streamPreview ? <div className="ai-bubble assistant"><MarkdownMessage text={streamPreview} /></div> : null}
           {busy && !streamPreview ? <div className="ai-bubble assistant muted">{engineHint ?? "Thinking…"}</div> : null}
-          {fallbackNote ? <p className="muted" style={{ fontSize: 12 }}>{fallbackNote}</p> : null}
+          {fallbackNote ? <p className="muted text-sm">{fallbackNote}</p> : null}
           <div ref={end} />
         </div>
         <div ref={live} className="sr-only" aria-live="polite">{busy ? "Generating a reply" : ""}</div>

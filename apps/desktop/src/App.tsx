@@ -6,7 +6,7 @@ import { ShellProvider } from "./lib/shellContext";
 import { parsePath, pathFor } from "./components/router";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { useUi } from "./stores/ui";
-import { applyAccent } from "./lib/theme";
+import { applyAccent, applyTheme } from "./lib/theme";
 import { queryClient } from "./lib/queryClient";
 
 function hideHtmlSplash() {
@@ -40,6 +40,7 @@ export default function App() {
       document.documentElement.dataset.reducedMotion = b.settings.reducedMotion ? "true" : "false";
       document.documentElement.dataset.os = navigator.userAgent.includes("Mac") ? "macos" : "windows";
       applyAccent(b.settings.accent);
+      applyTheme(b.settings.theme);
     }).catch((e) => setError(formatError(e)));
   }, []);
 

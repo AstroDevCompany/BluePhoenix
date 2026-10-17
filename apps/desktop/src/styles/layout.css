@@ -1,0 +1,184 @@
+.shell {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--ai-rail-w);
+  grid-template-rows: var(--titlebar-h) minmax(0, 1fr);
+  grid-template-areas:
+    "title title title"
+    "nav main chat";
+  height: 100%;
+  --ai-rail-w: 0px;
+  transition: --ai-rail-w var(--duration-med) var(--ease-out), grid-template-columns var(--duration-med) var(--ease-out);
+}
+
+.shell.ai-open {
+  --ai-rail-w: 480px;
+}
+
+.shell.onboard {
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "title"
+    "main";
+  --ai-rail-w: 0px;
+}
+
+.titlebar {
+  grid-area: title;
+  position: relative;
+  isolation: isolate;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-3) 0 var(--space-3);
+  background: rgba(5, 12, 20, 0.4);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+
+.titlebar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 70%);
+}
+
+.titlebar[data-platform="macos"] {
+  padding-left: 0;
+}
+
+.titlebar-lights {
+  display: none;
+  flex: 0 0 84px;
+  width: 84px;
+  height: 100%;
+  pointer-events: none;
+}
+
+.titlebar[data-platform="macos"] .titlebar-lights {
+  display: block;
+}
+
+.titlebar-drag {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.titlebar-wordmark {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.titlebar-logo {
+  height: 32px;
+  width: auto;
+  display: block;
+  pointer-events: none;
+}
+
+.boot-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.boot-screen img {
+  height: 94vh;
+  width: auto;
+  max-width: 100vw;
+  object-fit: contain;
+}
+
+body:not(.app-ready) .app-atmosphere {
+  display: none;
+}
+
+.titlebar-controls {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.titlebar-controls button {
+  width: 36px;
+  height: 28px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out);
+}
+
+.titlebar-controls button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  transform: scale(1.06);
+}
+
+.titlebar-controls button:active {
+  transform: scale(0.96);
+}
+
+.titlebar-controls button.close:hover {
+  background: #e81123;
+  color: white;
+}
+
+.sidebar {
+  grid-area: nav;
+  position: relative;
+  isolation: isolate;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-3) var(--space-4);
+  background: rgba(6, 14, 22, 0.46);
+  border-right: 1px solid var(--border);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  min-height: 0;
+}
+
+.sidebar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 28%);
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+.main {
+  grid-area: main;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-7) var(--space-8) var(--space-8);
+  view-transition-name: main-content;
+}

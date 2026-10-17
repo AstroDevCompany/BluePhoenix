@@ -4,6 +4,7 @@ import type { Todo } from "../../lib/types";
 import { api, formatError } from "../../lib/ipc";
 import { useUi } from "../../stores/ui";
 import { IconButton } from "../../components/ui/Tooltip";
+import { EmptyState } from "../../components/ui/EmptyState";
 
 const PRIORITIES = ["low", "medium", "high"] as const;
 
@@ -56,9 +57,9 @@ export function TodoList({
           value={title}
           onChange={(e) => setTitle(e.target.value)}
         />
-        <div className="seg" role="group" aria-label="Priority">
+        <div className="seg seg-labels" role="group" aria-label="Priority">
           {PRIORITIES.map((p) => (
-            <button key={p} type="button" className={priority === p ? "active" : ""} aria-pressed={priority === p} onClick={() => setPriority(p)} style={{ width: 64 }}>
+            <button key={p} type="button" className={priority === p ? "active" : ""} aria-pressed={priority === p} onClick={() => setPriority(p)}>
               {p}
             </button>
           ))}
@@ -66,10 +67,11 @@ export function TodoList({
         <button className="btn primary" type="submit" disabled={!title.trim()}>Add</button>
       </form>
       {open.length === 0 ? (
-        <div className="detail-empty">
-          <p className="detail-empty-title">{done.length > 0 ? "All done" : "No TODOs"}</p>
-          <p className="muted">{done.length > 0 ? `${done.length} completed.` : "Add a task for this project above."}</p>
-        </div>
+        <EmptyState
+          compact
+          title={done.length > 0 ? "All done" : "No TODOs"}
+          body={done.length > 0 ? `${done.length} completed.` : "Add a task for this project above."}
+        />
       ) : null}
       {shown.slice(0, 200).map((t) => (
         <div key={t.id} className={`todo-row list-row ${t.status === "completed" ? "is-done" : ""}`}>

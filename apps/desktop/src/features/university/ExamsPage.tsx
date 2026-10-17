@@ -3,6 +3,7 @@ import type { Category } from "../../lib/types";
 import { api } from "../../lib/ipc";
 import { keys } from "../../lib/queries";
 import { ErrorNote } from "../../components/ui/ErrorNote";
+import { SkeletonRows } from "../../components/ui/Skeleton";
 import { formatDate, formatExamStatus } from "../../lib/format";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { PageHeader } from "../../components/PageHeader";
@@ -26,7 +27,7 @@ export function ExamsPage({ category }: { category: Category }) {
       {query.isError ? (
         <ErrorNote error={query.error} onRetry={() => void query.refetch()} />
       ) : query.isPending ? (
-        <p className="muted">Loading…</p>
+        <SkeletonRows />
       ) : exams.length === 0 ? (
         <EmptyState title="No exam attempts" body="Record attempts from a course page. Failed attempts stay out of GPA unless you change that in Settings." />
       ) : (

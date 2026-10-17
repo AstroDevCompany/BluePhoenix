@@ -143,7 +143,7 @@ export function LocalModelsSection({
             return (
               <div key={model.id} className={`local-model-row ${active ? "is-active" : ""}`}>
                 <div className="local-model-meta">
-                  <div className="row" style={{ justifyContent: "space-between" }}>
+                  <div className="row spread">
                     <strong>{model.name}</strong>
                     <span className="badge">{model.managed ? "Copied" : "Linked"}</span>
                   </div>
@@ -220,7 +220,7 @@ export function LocalModelsSection({
                 <span style={{ width: `${pct}%` }} />
               </div>
             ) : null}
-            <div className="row" style={{ justifyContent: "flex-end", marginTop: 16 }}>
+            <div className="row actions-end">
               <button className="btn" type="button" disabled={importing} onClick={() => setPendingPath(null)}>Cancel</button>
               <button className="btn" type="button" disabled={importing} onClick={() => void importModel(false)}>Link in place</button>
               <button className="btn primary" type="button" disabled={importing} onClick={() => void importModel(true)}>
@@ -246,7 +246,7 @@ export function LocalModelsSection({
                 Also delete the copied GGUF file
               </label>
             ) : null}
-            <div className="row" style={{ justifyContent: "flex-end", marginTop: 16 }}>
+            <div className="row actions-end">
               <button className="btn" type="button" onClick={() => setRemoveTarget(null)}>Cancel</button>
               <button className="btn danger" type="button" onClick={() => void removeModel()}>Remove</button>
             </div>

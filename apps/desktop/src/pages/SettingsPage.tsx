@@ -5,7 +5,7 @@ import type { Settings } from "../lib/types";
 import { api, formatError } from "../lib/ipc";
 import { useUi } from "../stores/ui";
 import type { Bootstrap } from "../lib/types";
-import { applyAccent } from "../lib/theme";
+import { applyAccent, applyTheme } from "../lib/theme";
 
 const TABS = ["appearance", "workspace", "updates", "account", "data", "ai"] as const;
 
@@ -32,6 +32,7 @@ export function SettingsPage({
       toast("Settings saved");
       document.documentElement.dataset.reducedMotion = next.reducedMotion ? "true" : "false";
       applyAccent(next.accent);
+      applyTheme(next.theme);
       onReload();
     } catch (e) {
       toast(formatError(e), "error");
@@ -57,6 +58,9 @@ export function SettingsPage({
       <div key={current}>
       {current === "appearance" ? (
         <section className="glass-panel settings-card">
+          <label className="field"><span className="label">Theme</span>
+            <Select value={["light", "system"].includes(settings.theme) ? settings.theme : "dark"} onChange={(theme) => void save({ ...settings, theme })} options={[{ value: "dark", label: "Dark glass" }, { value: "light", label: "Light glass" }, { value: "system", label: "Match system" }]} />
+          </label>
           <label className="field"><span className="label">Accent</span>
             <Select value={settings.accent} onChange={(accent) => void save({ ...settings, accent })} options={[{ value: "cyan", label: "Cyan" }, { value: "teal", label: "Teal" }]} />
           </label>

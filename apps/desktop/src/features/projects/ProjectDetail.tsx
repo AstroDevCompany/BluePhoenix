@@ -12,6 +12,7 @@ import { TimerControls } from "../time/TimerControls";
 import { TimeEntries } from "../time/TimeEntries";
 import { TodoList } from "../todos/TodoList";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { SkeletonRows } from "../../components/ui/Skeleton";
 import { Select } from "../../components/ui/Select";
 import { SoftwareAiActions } from "../ai/SoftwareAiActions";
 import { IconButton } from "../../components/ui/Tooltip";
@@ -121,7 +122,7 @@ export function ProjectDetail({ category, projectId }: { category: Category; pro
   }, [files, projectId]);
 
   if (error) return <EmptyState title="Could not open this item" body={error} />;
-  if (!project) return <p className="muted">Loading…</p>;
+  if (!project) return <SkeletonRows count={6} />;
 
   const isSoftware = category.kind === "software";
   const backToList = () =>
@@ -136,7 +137,7 @@ export function ProjectDetail({ category, projectId }: { category: Category; pro
         <div className="detail-head-row">
           <div className="detail-head-id">
             <h1 className="h1">{project.name}</h1>
-            <div className="row" style={{ marginTop: 6 }}>
+            <div className="row mt-2">
               <span className="badge">{project.status}</span>
               {project.tags.map((t) => <span className="tag" key={t.id}>{t.name}</span>)}
             </div>
@@ -358,12 +359,7 @@ export function ProjectDetail({ category, projectId }: { category: Category; pro
 }
 
 function QuietEmpty({ title, body }: { title: string; body: string }) {
-  return (
-    <div className="detail-empty">
-      <p className="detail-empty-title">{title}</p>
-      <p className="muted">{body}</p>
-    </div>
-  );
+  return <EmptyState compact title={title} body={body} />;
 }
 
 function AddDisclosure({ label, children }: { label: string; children: ReactNode }) {

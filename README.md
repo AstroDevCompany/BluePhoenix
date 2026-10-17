@@ -41,10 +41,12 @@ And it does it without forcing every kind of project into the same generic templ
 Connect your development workflow directly to your project.
 
 - GitHub repository integration
-- Git actions
-- Pull from Git
-- Open in VS Code
-- Open terminal
+- Live git status on every project (branch, ahead/behind, changes, stash)
+- One-click fetch, pull and push, plus **Fetch all**, branch switching and stash
+- Open in your editor of choice (VS Code, Cursor, Zed, JetBrains, Sublime Text, Xcode)
+- Embedded terminal panel, or your system terminal (Terminal, iTerm, Warp, Ghostty, kitty)
+- Run saved commands with streamed output, stop and rerun
+- Command palette with per-project actions and a project switcher
 - Open project folder
 - Technology and framework tags
 - Custom commands
