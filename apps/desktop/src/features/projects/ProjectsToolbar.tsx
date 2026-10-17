@@ -24,12 +24,9 @@ export function ProjectsToolbar({
 }) {
   const attentionCount = projects.filter((p) => needsAttention(p.git)).length;
   const chips: { id: FilterKey; label: string; count?: number; show: boolean }[] = [
-    { id: "all", label: "All", count: projects.length, show: true },
+    { id: "all", label: "All", show: true },
     { id: "attention", label: "Needs attention", count: attentionCount, show: isSoftware },
     { id: "favorites", label: "Favorites", count: projects.filter((p) => p.favorite).length, show: true },
-    { id: "active", label: "Active", show: true },
-    { id: "paused", label: "Paused", show: true },
-    { id: "completed", label: "Done", show: true },
   ];
   const sort = SORTS.find((s) => s.id === view.sort) ?? SORTS[0];
   return (
@@ -49,26 +46,26 @@ export function ProjectsToolbar({
           </button>
         ) : null}
       </label>
-      <div className="toolbar-chips" role="group" aria-label="Filter">
+      <div className="seg" role="group" aria-label="Filter">
         {chips
           .filter((c) => c.show)
           .map((c) => (
             <button
               key={c.id}
               type="button"
-              className={`chip-btn ${view.filter === c.id ? "active" : ""}`}
+              className={view.filter === c.id ? "active" : ""}
               aria-pressed={view.filter === c.id}
               onClick={() => onChange({ filter: c.id })}
             >
               {c.label}
-              {c.count ? <span className="chip-count">{c.count}</span> : null}
+              {c.count ? <span className="seg-count">{c.count}</span> : null}
             </button>
           ))}
       </div>
       <div className="toolbar-end">
         <Menu>
           <MenuTrigger asChild>
-            <button type="button" className="btn" aria-label={`Sort: ${sort.label}`}>
+            <button type="button" className="btn quiet" aria-label={`Sort: ${sort.label}`}>
               <ArrowUpDown size={14} /> {sort.label}
             </button>
           </MenuTrigger>
@@ -80,7 +77,7 @@ export function ProjectsToolbar({
             ))}
           </MenuContent>
         </Menu>
-        <div className="seg" role="group" aria-label="Layout">
+        <div className="seg icons" role="group" aria-label="Layout">
           <button type="button" className={view.layout === "grid" ? "active" : ""} aria-pressed={view.layout === "grid"} aria-label="Grid view" onClick={() => onChange({ layout: "grid" })}>
             <LayoutGrid size={14} />
           </button>

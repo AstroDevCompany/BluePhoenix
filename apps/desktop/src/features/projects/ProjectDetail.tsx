@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import * as Tabs from "@radix-ui/react-tabs";
-import { ArrowLeft, FolderOpen, Github, Globe } from "lucide-react";
+import { ArrowLeft, FolderOpen } from "lucide-react";
 import type { Category, CommandDto, ProjectCard, Todo } from "../../lib/types";
 import { hasCap } from "../../lib/types";
 import { api, formatError } from "../../lib/ipc";
@@ -17,7 +17,8 @@ import { Select } from "../../components/ui/Select";
 import { SoftwareAiActions } from "../ai/SoftwareAiActions";
 import { IconButton } from "../../components/ui/Tooltip";
 import { keys, useProject } from "../../lib/queries";
-import { EditorButton, GitButton, RunButton, TerminalButton } from "./ProjectActions";
+import { EditorButton, GitButton, ProjectMoreMenu, RunButton, TerminalButton } from "./ProjectActions";
+import { StatusDot, projectState } from "../../components/SidebarProjects";
 import { GitSummary } from "./GitSummary";
 import { GitTab } from "./detail/GitTab";
 import { CommandsTab } from "./detail/CommandsTab";
@@ -88,7 +89,6 @@ export function ProjectDetail({ category, projectId }: { category: Category; pro
   const projectQuery = useProject(projectId);
   const project = projectQuery.data;
   const error = projectQuery.isError ? formatError(projectQuery.error) : null;
-  const activeTab = tabs.find((item) => item.id === tab) ?? tabs[0];
 
   const reload = () => {
     void client.invalidateQueries({ queryKey: keys.project(projectId) });
@@ -136,14 +136,15 @@ export function ProjectDetail({ category, projectId }: { category: Category; pro
         </button>
         <div className="detail-head-row">
           <div className="detail-head-id">
-            <h1 className="h1">{project.name}</h1>
-            <div className="row mt-2">
-              <span className="badge">{project.status}</span>
-              {project.tags.map((t) => <span className="tag" key={t.id}>{t.name}</span>)}
+            <div className="detail-title">
+              {isSoftware ? <StatusDot state={projectState(project)} /> : null}
+              <h1 className="h1">{project.name}</h1>
+              {project.status !== "active" ? <span className="badge">{project.status}</span> : null}
             </div>
-            {isSoftware ? <GitSummary git={project.git} showCommit={false} /> : null}
+            {isSoftware ? <GitSummary git={project.git} /> : null}
+            {project.tags.length > 0 ? <div className="detail-tags">{project.tags.map((t) => t.name).join(" · ")}</div> : null}
           </div>
-          <div className="row detail-head-actions">
+          <div className="detail-actions">
             {hasCap(category, "topics") && topics.length > 0 ? (
               <Select
                 value={topicId}
@@ -159,23 +160,20 @@ export function ProjectDetail({ category, projectId }: { category: Category; pro
                 {hasCap(category, "git") ? <GitButton project={project} /> : null}
               </>
             ) : null}
+            <span className="detail-actions-gap" />
             <TimerControls projectId={project.id} label={category.terminology.timerStart} topicId={topicId || undefined} onDone={reload} />
-            {project.localPath ? (
-              <IconButton label="Open folder" className="btn icon" onClick={() => void api.openPath(project.localPath!)}>
-                <FolderOpen size={14} />
-              </IconButton>
-            ) : null}
-            {hasCap(category, "github") && project.githubUrl ? (
-              <IconButton label="GitHub" className="btn icon" onClick={() => void api.openUrl(project.githubUrl!)}>
-                <Github size={14} />
-              </IconButton>
-            ) : null}
-            {project.websiteUrl ? (
-              <IconButton label="Website" className="btn icon" onClick={() => void api.openUrl(project.websiteUrl!)}>
-                <Globe size={14} />
-              </IconButton>
-            ) : null}
-            {project.primaryFilePath ? <button className="btn primary" type="button" onClick={() => void api.openPath(project.primaryFilePath!)}>Open primary file</button> : null}
+            {isSoftware ? (
+              <ProjectMoreMenu project={project} />
+            ) : (
+              <>
+                {project.localPath ? (
+                  <IconButton label="Open folder" className="btn icon" onClick={() => void api.openPath(project.localPath!)}>
+                    <FolderOpen size={14} />
+                  </IconButton>
+                ) : null}
+                {project.primaryFilePath ? <button className="btn primary" type="button" onClick={() => void api.openPath(project.primaryFilePath!)}>Open primary file</button> : null}
+              </>
+            )}
           </div>
         </div>
         <Tabs.Root value={tab} onValueChange={(v) => setTab(v as DetailTab)}>
@@ -191,7 +189,6 @@ export function ProjectDetail({ category, projectId }: { category: Category; pro
 
       <div className="detail-stage">
         <div key={tab} className="detail-pane page-enter">
-          <h2 className="detail-hero">{activeTab?.label ?? "Overview"}</h2>
           {project.description && tab === "overview" ? <p className="muted detail-lede">{project.description}</p> : null}
 
           {tab === "overview" ? (
@@ -207,19 +204,12 @@ export function ProjectDetail({ category, projectId }: { category: Category; pro
                   {hasCap(category, "attendance") && project.attendance ? <div className="metric"><span>Attendance</span><b>{project.attendance.percent.toFixed(1)}%</b></div> : null}
                 </div>
               </section>
-              {project.git?.isRepo || project.git?.error ? (
+              {project.achievements.length > 0 ? (
                 <section className="detail-section">
-                  <h3 className="detail-section-title">Git</h3>
-                  <GitSummary git={project.git} />
-                  {project.git?.isRepo ? (
-                    <button className="btn ghost" type="button" onClick={() => setTab("git")}>Branches, changes and history</button>
-                  ) : null}
+                  <h3 className="detail-section-title">Achievements</h3>
+                  <TrophyRow items={project.achievements} />
                 </section>
               ) : null}
-              <section className="detail-section">
-                <h3 className="detail-section-title">Achievements</h3>
-                {project.achievements.length > 0 ? <TrophyRow items={project.achievements} /> : <p className="muted">No trophies on this item yet.</p>}
-              </section>
               {hasCap(category, "grades") ? (
                 <section className="detail-section">
                   <h3 className="detail-section-title">Grade</h3>

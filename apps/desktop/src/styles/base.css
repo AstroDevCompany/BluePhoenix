@@ -26,10 +26,7 @@ select {
   font-family: inherit;
 }
 
-button,
-.btn,
-.select-trigger,
-.workspace-switch {
+button {
   appearance: none;
   -webkit-appearance: none;
 }
@@ -99,14 +96,9 @@ button,
 }
 
 /* Numbers line up in tables, stats and counters; code-like text uses the mono face. */
-.stat b,
+
 .metric b,
-.badge,
-.tag,
 .chip-count,
-.list-row-meta,
-.kbd,
-.git-chip,
 .project-card-stats,
 .dash-todo-project,
 .week-bar-label {

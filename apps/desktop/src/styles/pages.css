@@ -77,10 +77,6 @@
   flex-wrap: wrap;
 }
 
-.detail-head-actions {
-  justify-content: flex-end;
-}
-
 .detail-head-actions .select-root {
   width: 180px;
   flex: 0 0 180px;
@@ -208,11 +204,6 @@
 
 .ai-actions-card {
   padding: var(--space-5);
-}
-
-.project-card-head {
-  flex-shrink: 0;
-  align-items: center;
 }
 
 .provider-switch {

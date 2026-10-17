@@ -25,7 +25,7 @@ export function CommandsPage({ category }: { category: Category }) {
             <div key={p.id} className="list-row">
               <span className="list-row-title">{cmd.name}</span>
               <span className="list-row-meta">{p.name} · {cmd.command}</span>
-              <RunButton project={p} command={cmd} primary={false} />
+              <RunButton project={p} command={cmd} variant="default" small />
             </div>
           );
         })

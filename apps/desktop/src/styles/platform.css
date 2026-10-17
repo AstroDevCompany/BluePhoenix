@@ -28,18 +28,12 @@ html[data-os="windows"] .toast {
 @media (prefers-reduced-transparency: reduce) {
   .sidebar,
   .titlebar,
-  .glass-panel,
-  .project-card,
-  .btn,
-  .select-trigger,
-  .workspace-switch,
   .dialog,
   .palette,
   .toast,
   .select-menu,
   .achievement-tip,
   .ui-tooltip,
-  .stat,
   .ai-rail {
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
@@ -61,7 +55,6 @@ html[data-os="windows"] .toast {
 @media (prefers-reduced-motion: reduce) {
   .app-atmosphere::after,
   .rainbow-text,
-  .grid-cards > *,
   .overlay,
   .dialog,
   .toast,
@@ -76,16 +69,7 @@ html[data-os="windows"] .toast {
     background-position: 40% 0;
   }
 
-  .project-card:hover,
-  .project-card:active,
-  .btn:hover,
-  .btn:active,
-  .stat:hover,
-  .nav-btn:hover,
-  .nav-btn:active,
-  .select-trigger:hover,
-  .workspace-switch:hover,
-  .workspace-switch:active,
+  
   .palette-item:hover,
   .palette-item.active,
   .select-option:hover,

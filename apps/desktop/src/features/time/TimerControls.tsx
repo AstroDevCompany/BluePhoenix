@@ -1,4 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { Pause } from "lucide-react";
 import { api, formatError } from "../../lib/ipc";
 import { keys, useRunningTimer } from "../../lib/queries";
 import { useUi } from "../../stores/ui";
@@ -37,11 +38,11 @@ export function TimerControls({
   if (runningHere) {
     return (
       <>
-        <button className="btn" type="button" onClick={() => api.pauseTimer().then(after).catch(fail)}>
-          Pause
+        <button className="btn icon quiet" type="button" title="Pause the timer" aria-label="Pause the timer" onClick={() => api.pauseTimer().then(after).catch(fail)}>
+          <Pause size={14} />
         </button>
-        <button className="btn" type="button" onClick={() => api.stopTimer().then(after).catch(fail)}>
-          Stop
+        <button className="btn timer-stop" type="button" onClick={() => api.stopTimer().then(after).catch(fail)}>
+          <span className="timer-pulse" aria-hidden /> Stop timer
         </button>
       </>
     );
@@ -49,7 +50,7 @@ export function TimerControls({
 
   return (
     <button
-      className="btn primary"
+      className="btn"
       type="button"
       title={runningElsewhere ? `Stops the timer on ${active?.projectName} first` : undefined}
       onClick={() =>

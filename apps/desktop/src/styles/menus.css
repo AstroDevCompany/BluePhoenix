@@ -26,24 +26,6 @@
 }
 
 /* ---------- Keyboard hints ---------- */
-.kbd {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
-  border-radius: 6px;
-  border: 1px solid var(--border-strong);
-  background: rgba(0, 0, 0, 0.28);
-  color: var(--text-faint);
-  font-family: var(--font-sans);
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 1;
-  white-space: nowrap;
-}
 
 /* ---------- Menus (Radix DropdownMenu) ---------- */
 .menu-content {
@@ -150,7 +132,6 @@
   justify-content: center;
 }
 
-.btn.spin,
 .spin {
   animation: spin 0.9s linear infinite;
 }

@@ -40,25 +40,3 @@ export function TimerWidget({ onOpenProject }: { onOpenProject: (projectId: stri
     </div>
   );
 }
-
-/** Compact titlebar badge version of the running timer. */
-export function TimerBadge({ onOpenProject }: { onOpenProject: (projectId: string) => void }) {
-  const { data: timer } = useRunningTimer();
-  const active = timer && !timer.entry.endedAt ? timer : null;
-  const elapsed = useElapsed(active?.entry.startedAt);
-  if (!active) return null;
-  const label = active.isLocalDevice
-    ? `${active.projectName} · ${formatDuration(elapsed)}`
-    : "Running on another device";
-  return (
-    <button
-      type="button"
-      className="badge timer-badge"
-      disabled={!active.isLocalDevice}
-      onClick={() => onOpenProject(active.entry.projectId)}
-    >
-      <span className="timer-pulse" aria-hidden />
-      {label}
-    </button>
-  );
-}

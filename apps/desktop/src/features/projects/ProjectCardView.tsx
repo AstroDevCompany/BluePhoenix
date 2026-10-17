@@ -1,23 +1,16 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Code2, FolderOpen, Github, Globe, MoreHorizontal, Star, Trash2, type LucideIcon } from "lucide-react";
-import type { PointerEvent } from "react";
+import { FolderOpen, Star, Trash2 } from "lucide-react";
 import type { Category, ProjectCard } from "../../lib/types";
 import { hasCap } from "../../lib/types";
-import { formatDuration } from "../../lib/format";
+import { formatDuration, formatRelative } from "../../lib/format";
 import { TrophyRow } from "../achievements/TrophyRow";
 import { IconButton } from "../../components/ui/Tooltip";
-import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "../../components/ui/Menu";
+import { MenuItem, MenuSeparator } from "../../components/ui/Menu";
 import { api, formatError } from "../../lib/ipc";
-import { openInEditor } from "../../lib/projectActions";
 import { useUi } from "../../stores/ui";
-import { EditorButton, GitButton, RunButton, TerminalButton } from "./ProjectActions";
+import { EditorButton, GitButton, ProjectMoreMenu, RunButton } from "./ProjectActions";
 import { GitSummary } from "./GitSummary";
-
-function onCardSpot(e: PointerEvent<HTMLElement>) {
-  const r = e.currentTarget.getBoundingClientRect();
-  e.currentTarget.style.setProperty("--spot-x", `${((e.clientX - r.left) / r.width) * 100}%`);
-  e.currentTarget.style.setProperty("--spot-y", `${((e.clientY - r.top) / r.height) * 100}%`);
-}
+import { StatusDot, projectState } from "../../components/SidebarProjects";
 
 export function ProjectCardView({
   project,
@@ -36,6 +29,7 @@ export function ProjectCardView({
   const confirm = useUi((s) => s.askConfirm);
   const client = useQueryClient();
   const noun = category.terminology.itemSingular.toLowerCase();
+  const isSoftware = category.kind === "software";
 
   const askRemove = () => {
     confirm(
@@ -64,12 +58,13 @@ export function ProjectCardView({
   const Body =
     category.kind === "university"
       ? UniversityBody
-      : category.kind === "software"
+      : isSoftware
         ? SoftwareBody
         : GenericBody;
   return (
-    <article className={`project-card ${layout === "list" ? "is-list" : ""}`} onClick={onOpen} onPointerMove={onCardSpot}>
+    <article className="project-card" onClick={onOpen}>
       <div className="project-card-top">
+        {isSoftware ? <StatusDot state={projectState(project)} /> : null}
         <button
           type="button"
           className="project-card-title"
@@ -80,78 +75,52 @@ export function ProjectCardView({
         >
           {project.name}
         </button>
-        <div className="project-card-head" onClick={(e) => e.stopPropagation()}>
-          <span className="badge">{project.status}</span>
+        {project.status !== "active" ? <span className="badge">{project.status}</span> : null}
+        <div className="project-card-tools" onClick={(e) => e.stopPropagation()}>
           <IconButton
             label={project.favorite ? "Remove from favorites" : "Add to favorites"}
-            className={`btn icon ghost ${project.favorite ? "fav-on" : ""}`}
+            className={`btn icon sm quiet star ${project.favorite ? "on" : ""}`}
             onClick={toggleFavorite}
           >
             <Star size={14} fill={project.favorite ? "currentColor" : "none"} />
           </IconButton>
-          <Menu>
-            <MenuTrigger asChild>
-              <button type="button" className="btn icon ghost" aria-label={`More actions for ${project.name}`}>
-                <MoreHorizontal size={15} />
-              </button>
-            </MenuTrigger>
-            <MenuContent align="end">
-              <MenuItem onSelect={onOpen}>Open</MenuItem>
-              {project.localPath && hasCap(category, "vscode") ? (
-                <MenuItem icon={<Code2 size={14} />} onSelect={() => void openInEditor(project)}>Open in editor</MenuItem>
-              ) : null}
-              {project.localPath ? (
-                <MenuItem icon={<FolderOpen size={14} />} onSelect={() => void api.revealPath(project.localPath!)}>Reveal folder</MenuItem>
-              ) : null}
-              <MenuSeparator />
-              <MenuItem danger icon={<Trash2 size={14} />} onSelect={askRemove}>Remove {noun}</MenuItem>
-            </MenuContent>
-          </Menu>
+          <ProjectMoreMenu
+            project={project}
+            extra={
+              <>
+                <MenuSeparator />
+                <MenuItem danger icon={<Trash2 size={14} />} onSelect={askRemove}>Remove {noun}</MenuItem>
+              </>
+            }
+          />
         </div>
       </div>
       {project.description ? <div className="muted project-card-desc">{project.description}</div> : null}
       <Body project={project} category={category} onRefresh={onRefresh} />
-      {hasCap(category, "achievements") && layout === "grid" ? <TrophyRow items={project.achievements} /> : null}
+      {hasCap(category, "achievements") && layout === "grid" && project.achievements.length > 0 ? (
+        <TrophyRow items={project.achievements} />
+      ) : null}
     </article>
   );
 }
 
-function LinkIcon({ icon: Icon, label, onClick }: { icon: LucideIcon; label: string; onClick: () => void }) {
-  return (
-    <IconButton label={label} className="btn icon" onClick={onClick}>
-      <Icon size={14} />
-    </IconButton>
-  );
-}
-
 function SoftwareBody({ project }: { project: ProjectCard; category: Category; onRefresh: () => void }) {
-  const toast = useUi((s) => s.showToast);
-  const open = (url: string) => void api.openUrl(url).catch((e) => toast(formatError(e), "error"));
   const pinned = project.pinnedCommand;
+  const meta = [
+    formatDuration(project.totalTrackedSeconds),
+    project.currentVersion ? `v${project.currentVersion}` : null,
+    `${project.openTodos} TODO${project.openTodos === 1 ? "" : "s"}`,
+    project.git?.lastCommitAt ? `updated ${formatRelative(project.git.lastCommitAt)}` : null,
+  ].filter(Boolean);
   return (
     <>
-      {project.tags.length > 0 ? (
-        <div className="row">
-          {project.tags.map((t) => (
-            <span className="tag" key={t.id}>{t.name}</span>
-          ))}
-        </div>
-      ) : null}
       <GitSummary git={project.git} />
-      <div className="project-card-stats muted">
-        <span>{formatDuration(project.totalTrackedSeconds)}</span>
-        <span>{project.currentVersion ? `v${project.currentVersion}` : "No version"}</span>
-        <span>{project.openTodos} TODO{project.openTodos === 1 ? "" : "s"}</span>
-      </div>
-      <div className="project-card-actions" onClick={(e) => e.stopPropagation()}>
-        <EditorButton project={project} compact />
-        <TerminalButton project={project} compact />
-        {pinned ? <RunButton project={project} command={pinned} /> : null}
-        <GitButton project={project} />
-        <span className="project-card-links">
-          {project.githubUrl ? <LinkIcon icon={Github} label="GitHub" onClick={() => open(project.githubUrl!)} /> : null}
-          {project.websiteUrl ? <LinkIcon icon={Globe} label="Website" onClick={() => open(project.websiteUrl!)} /> : null}
-        </span>
+      <div className="project-card-meta">{meta.join("  ·  ")}</div>
+      <div className="project-card-foot" onClick={(e) => e.stopPropagation()}>
+        <EditorButton project={project} small quiet />
+        {pinned ? <RunButton project={project} command={pinned} variant="quiet" small /> : null}
+        <span className="grow" />
+        <GitButton project={project} onlyWhenNeeded small />
       </div>
     </>
   );

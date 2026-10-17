@@ -30,9 +30,9 @@
   --shadow: 0 16px 40px rgba(0, 0, 0, 0.36), 0 0 24px rgba(40, 160, 120, 0.1);
   --shadow-hover: 0 20px 52px rgba(0, 0, 0, 0.4), 0 0 36px rgba(50, 190, 140, 0.2);
   --shadow-sm: 0 8px 20px rgba(0, 0, 0, 0.22);
-  --radius-sm: 14px;
-  --radius-md: 18px;
-  --radius-lg: 28px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -41,7 +41,8 @@
   --space-6: 24px;
   --space-7: 32px;
   --space-8: 40px;
-  --control-h: 38px;
+  --control-h: 34px;
+  --control-h-sm: 28px;
   --titlebar-h: 40px;
   --sidebar-w: 248px;
   --duration-fast: 180ms;
@@ -51,6 +52,12 @@
   --duration-micro: var(--duration-fast);
   --duration-panel: var(--duration-med);
   --ease: var(--ease-out);
+  /* Calm surfaces: one flat fill, one hairline, no per-control shadows. */
+  --surface: rgba(255, 255, 255, 0.035);
+  --surface-hover: rgba(255, 255, 255, 0.065);
+  --surface-sunken: rgba(0, 0, 0, 0.22);
+  --line: rgba(255, 255, 255, 0.07);
+  --line-strong: rgba(255, 255, 255, 0.13);
   --focus: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
   --z-tooltip: 1000;
   --success: #4ade80;

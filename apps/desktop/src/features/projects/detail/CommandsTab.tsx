@@ -95,7 +95,7 @@ export function CommandsTab({
               </span>
               <code className="command-row-cmd">{c.command}{c.workingDirectory ? `  (in ${c.workingDirectory})` : ""}</code>
             </div>
-            <RunButton project={project} command={c} primary={false} />
+            <RunButton project={project} command={c} variant="default" small />
             <IconButton label={c.pinned ? "Unpin" : "Pin to card"} className="btn icon ghost" onClick={() => void save({ ...c, pinned: !c.pinned })}>
               {c.pinned ? <PinOff size={14} /> : <Pin size={14} />}
             </IconButton>

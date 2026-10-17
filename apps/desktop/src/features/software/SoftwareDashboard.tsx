@@ -9,14 +9,15 @@ import { GitSummary, needsAttention } from "../projects/GitSummary";
 import { attentionScore } from "../projects/projectView";
 import { useTerminals } from "../../stores/terminals";
 import { closeSession, killSession } from "../../lib/terminalActions";
+import { StatusDot, projectState } from "../../components/SidebarProjects";
 
 const PRIORITY_RANK: Record<string, number> = { high: 0, urgent: 0, medium: 1, low: 2 };
 
-function Panel({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
+function Section({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <section className="dash-panel glass-panel">
-      <header className="dash-panel-head">
-        <h3 className="dash-panel-title">{title}</h3>
+    <section className="dash-section">
+      <header className="dash-section-head">
+        <h2 className="dash-section-title">{title}</h2>
         {action}
       </header>
       {children}
@@ -29,7 +30,7 @@ function WeekBars({ days }: { days: { date: string; seconds: number }[] }) {
   return (
     <div className="week-bars" role="img" aria-label={`Tracked time over the last 7 days: ${days.map((d) => formatDuration(d.seconds)).join(", ")}`}>
       {days.map((d, i) => {
-        const label = new Date(`${d.date}T12:00:00`).toLocaleDateString(undefined, { weekday: "narrow" });
+        const label = new Date(`${d.date}T12:00:00`).toLocaleDateString(undefined, { weekday: "short" });
         return (
           <div key={d.date} className={`week-bar ${i === days.length - 1 ? "today" : ""}`} title={`${d.date} · ${formatDuration(d.seconds)}`}>
             <span className="week-bar-fill" style={{ height: `${Math.max(d.seconds > 0 ? 6 : 2, (d.seconds / max) * 100)}%` }} />
@@ -70,6 +71,7 @@ export function SoftwareDashboard({
     .slice(0, 6);
   const running = timer && timer.isLocalDevice && !timer.entry.endedAt ? timer : null;
   const runningSessions = sessions.filter((s) => s.running);
+  const openTodos = live.reduce((a, p) => a + p.openTodos, 0);
 
   const doFetchAll = async () => {
     setFetching(true);
@@ -82,58 +84,57 @@ export function SoftwareDashboard({
 
   return (
     <div className="dash">
-      <div className="stat-grid">
-        <div className="stat">
-          Today
+      <div className="dash-metrics">
+        <div className="metric-item">
+          <span className="metric-label">Today</span>
           <b>{formatDuration(summary.data?.todaySeconds ?? 0)}</b>
-          {running ? <small className="stat-note">● {running.projectName} running</small> : null}
+          {running ? <span className="metric-note">{running.projectName} running</span> : null}
         </div>
-        <div className="stat">
-          This week
+        <div className="metric-item">
+          <span className="metric-label">This week</span>
           <b>{formatDuration(summary.data?.weekSeconds ?? 0)}</b>
         </div>
-        <div className="stat">
-          Open TODOs
-          <b>{live.reduce((a, p) => a + p.openTodos, 0)}</b>
+        <div className="metric-item">
+          <span className="metric-label">Open TODOs</span>
+          <b>{openTodos}</b>
         </div>
-        <div className="stat">
-          Needs attention
-          <b>{attention.length}</b>
-          <small className="stat-note">of {trackedRepos.length} repos</small>
+        <div className="metric-item week">
+          <WeekBars days={summary.data?.days ?? []} />
         </div>
       </div>
 
-      <div className="dash-grid">
-        <Panel
-          title="Needs attention"
+      <div className="dash-cols">
+        <Section
+          title={`Needs attention${attention.length ? ` · ${attention.length}` : ""}`}
           action={
-            <button className="btn" type="button" disabled={fetching || trackedRepos.length === 0} onClick={() => void doFetchAll()}>
-              {fetching ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />} Fetch all
+            <button className="btn sm quiet" type="button" disabled={fetching || trackedRepos.length === 0} onClick={() => void doFetchAll()}>
+              {fetching ? <Loader2 size={13} className="spin" /> : <RefreshCw size={13} />} Fetch all
             </button>
           }
         >
           {attention.length === 0 ? (
-            <p className="dash-empty muted">
+            <p className="dash-empty">
               <CheckCircle2 size={15} aria-hidden /> {trackedRepos.length === 0 ? "No git repositories tracked yet." : "Every repository is clean and in sync."}
             </p>
           ) : (
             attention.map((p) => (
               <div key={p.id} className="dash-row">
+                <StatusDot state={projectState(p)} />
                 <button type="button" className="dash-row-main" onClick={() => onOpenProject?.(p.id)}>
                   <span className="dash-row-title">{p.name}</span>
-                  <GitSummary git={p.git} showCommit={false} />
+                  <GitSummary git={p.git} />
                 </button>
-                <GitButton project={p} />
+                <GitButton project={p} small />
               </div>
             ))
           )}
-        </Panel>
+        </Section>
 
-        <Panel title="Next up">
+        <Section title="Next up">
           {todosQuery.isPending ? (
-            <p className="dash-empty muted">Loading…</p>
+            <p className="dash-empty">Loading…</p>
           ) : nextUp.length === 0 ? (
-            <p className="dash-empty muted">No open TODOs. Nice.</p>
+            <p className="dash-empty">No open TODOs.</p>
           ) : (
             nextUp.map((t) => (
               <label key={t.id} className="dash-todo">
@@ -152,40 +153,35 @@ export function SoftwareDashboard({
               </label>
             ))
           )}
-        </Panel>
-
-        <Panel title="Last 7 days">
-          <WeekBars days={summary.data?.days ?? []} />
-        </Panel>
-
-        <Panel title="Running in terminals">
-          {runningSessions.length === 0 ? (
-            <p className="dash-empty muted">Nothing running. Start a dev server from a project card.</p>
-          ) : (
-            runningSessions.map((s) => (
-              <div key={s.id} className="dash-row">
-                <button
-                  type="button"
-                  className="dash-row-main"
-                  onClick={() => {
-                    useTerminals.getState().setActive(s.id);
-                    useTerminals.getState().setDockOpen(true);
-                  }}
-                >
-                  <span className="dash-row-title">{s.title}</span>
-                  <span className="muted dash-row-sub">{s.cwd}</span>
-                </button>
-                <button type="button" className="btn icon ghost" aria-label={`Stop ${s.title}`} onClick={() => void killSession(s.id)}>
-                  <Square size={13} />
-                </button>
-                <button type="button" className="btn icon ghost" aria-label={`Close ${s.title}`} onClick={() => void closeSession(s.id)}>
-                  ×
-                </button>
-              </div>
-            ))
-          )}
-        </Panel>
+        </Section>
       </div>
+
+      {runningSessions.length > 0 ? (
+        <Section title="Running in terminals">
+          {runningSessions.map((s) => (
+            <div key={s.id} className="dash-row">
+              <span className="term-status" data-state="running" aria-hidden />
+              <button
+                type="button"
+                className="dash-row-main"
+                onClick={() => {
+                  useTerminals.getState().setActive(s.id);
+                  useTerminals.getState().setDockOpen(true);
+                }}
+              >
+                <span className="dash-row-title">{s.title}</span>
+                <span className="faint dash-row-sub">{s.cwd}</span>
+              </button>
+              <button type="button" className="btn sm quiet" onClick={() => void killSession(s.id)}>
+                <Square size={12} /> Stop
+              </button>
+              <button type="button" className="btn icon sm quiet" aria-label={`Close ${s.title}`} onClick={() => void closeSession(s.id)}>
+                ×
+              </button>
+            </div>
+          ))}
+        </Section>
+      ) : null}
     </div>
   );
 }

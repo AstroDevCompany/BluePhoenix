@@ -12,8 +12,8 @@ export function SplitButton({
   title,
   onClick,
   disabled,
-  primary,
-  compact,
+  variant = "default",
+  small,
   menuLabel = "More options",
   onMenuOpenChange,
   children,
@@ -23,17 +23,18 @@ export function SplitButton({
   title?: string;
   onClick: () => void;
   disabled?: boolean;
-  primary?: boolean;
-  compact?: boolean;
+  variant?: "default" | "primary" | "quiet";
+  small?: boolean;
   menuLabel?: string;
   onMenuOpenChange?: (open: boolean) => void;
   children: ReactNode;
 }) {
+  const tone = variant === "primary" ? "primary" : variant === "quiet" ? "quiet" : "";
   return (
-    <div className={`split-btn ${compact ? "compact" : ""}`}>
+    <div className={`split-btn ${small ? "sm" : ""}`}>
       <button
         type="button"
-        className={`btn split-main ${primary ? "primary" : ""}`}
+        className={`btn split-main ${tone}`}
         onClick={onClick}
         disabled={disabled}
         title={title}
@@ -44,12 +45,7 @@ export function SplitButton({
       </button>
       <Menu onOpenChange={onMenuOpenChange}>
         <MenuTrigger asChild>
-          <button
-            type="button"
-            className={`btn split-caret ${primary ? "primary" : ""}`}
-            aria-label={menuLabel}
-            disabled={disabled}
-          >
+          <button type="button" className={`btn split-caret ${tone}`} aria-label={menuLabel} disabled={disabled}>
             <ChevronDown size={13} />
           </button>
         </MenuTrigger>

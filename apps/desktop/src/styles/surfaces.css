@@ -1,6 +1,4 @@
-.glass-panel,
-.project-card,
-.stat,
+
 .dialog,
 .palette,
 .toast,
@@ -9,8 +7,6 @@
   isolation: isolate;
 }
 
-.glass-panel::before,
-.stat::before,
 .dialog::before,
 .palette::before,
 .toast::before,
@@ -23,124 +19,6 @@
   pointer-events: none;
   background: radial-gradient(120% 80% at 50% -20%, color-mix(in srgb, var(--workspace) 12%, transparent), transparent 55%);
 }
-
-.glass-panel {
-  background:
-    radial-gradient(90% 70% at 50% -20%, rgba(50, 170, 140, 0.14), transparent 50%),
-    linear-gradient(180deg, rgba(10, 32, 28, 0.82), rgba(6, 16, 18, 0.88));
-  border: 1px solid transparent;
-  border-radius: var(--radius-lg);
-  box-shadow:
-    0 0 0 1px rgba(170, 240, 210, 0.12),
-    var(--shadow),
-    inset 0 1px 0 rgba(200, 255, 230, 0.1);
-}
-
-.project-card {
-  --spot-x: 50%;
-  --spot-y: 0%;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: 24px 24px 18px;
-  border-radius: var(--radius-lg);
-  border: 0;
-  background:
-    radial-gradient(120% 90% at 50% -28%, color-mix(in srgb, var(--workspace) 58%, transparent), transparent 56%),
-    radial-gradient(80% 60% at 92% 112%, rgba(0, 0, 0, 0.52), transparent 58%),
-    linear-gradient(180deg, #185244 0%, #0c261e 48%, #071310 100%);
-  box-shadow:
-    0 0 40px color-mix(in srgb, var(--workspace) 22%, transparent),
-    0 22px 50px rgba(0, 0, 0, 0.42),
-    inset 0 1px 1px rgba(220, 255, 235, 0.34),
-    inset 0 0 40px color-mix(in srgb, var(--workspace) 10%, transparent),
-    inset 0 -40px 64px rgba(0, 8, 8, 0.42);
-  cursor: pointer;
-  transform: translateZ(0);
-  transition:
-    box-shadow var(--duration-med) var(--ease-out),
-    filter var(--duration-fast) var(--ease-out);
-}
-
-.project-card::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  padding: 1.5px;
-  background: linear-gradient(
-    180deg,
-    rgba(235, 255, 245, 0.72) 0%,
-    rgba(150, 220, 180, 0.16) 28%,
-    rgba(70, 120, 100, 0.08) 62%,
-    rgba(130, 210, 170, 0.22) 100%
-  );
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  opacity: 0.95;
-}
-
-.project-card::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  background: radial-gradient(
-    240px circle at var(--spot-x) var(--spot-y),
-    color-mix(in srgb, var(--workspace) 18%, transparent),
-    transparent 62%
-  );
-  opacity: 0;
-  transition: opacity var(--duration-fast) var(--ease-out);
-}
-
-.project-card:hover {
-  box-shadow:
-    0 0 48px color-mix(in srgb, var(--workspace) 28%, transparent),
-    0 24px 56px rgba(0, 0, 0, 0.44),
-    inset 0 1px 1px rgba(235, 255, 245, 0.4),
-    inset 0 0 40px color-mix(in srgb, var(--workspace) 12%, transparent),
-    inset 0 -40px 64px rgba(0, 8, 8, 0.36);
-}
-
-.project-card:hover::after {
-  opacity: 1;
-}
-
-.project-card:hover::before {
-  opacity: 1;
-}
-
-.project-card:active:not(:has(.btn:active)) {
-  filter: brightness(0.96);
-}
-
-.project-card .trophy-row {
-  margin-top: var(--space-1);
-  padding-top: var(--space-3);
-  border-top: 1px solid rgba(170, 240, 210, 0.08);
-}
-
-.grid-cards > * {
-  animation: card-in var(--duration-med) var(--ease-out) both;
-}
-
-.grid-cards > *:nth-child(1) { animation-delay: 0ms; }
-.grid-cards > *:nth-child(2) { animation-delay: 40ms; }
-.grid-cards > *:nth-child(3) { animation-delay: 80ms; }
-.grid-cards > *:nth-child(4) { animation-delay: 120ms; }
-.grid-cards > *:nth-child(5) { animation-delay: 160ms; }
-.grid-cards > *:nth-child(6) { animation-delay: 200ms; }
-.grid-cards > *:nth-child(7) { animation-delay: 240ms; }
-.grid-cards > *:nth-child(8) { animation-delay: 280ms; }
-.grid-cards > *:nth-child(9) { animation-delay: 320ms; }
-.grid-cards > *:nth-child(10) { animation-delay: 360ms; }
-.grid-cards > *:nth-child(11) { animation-delay: 400ms; }
-.grid-cards > *:nth-child(n + 12) { animation-delay: 440ms; }
 
 @keyframes card-in {
   from { opacity: 0; }

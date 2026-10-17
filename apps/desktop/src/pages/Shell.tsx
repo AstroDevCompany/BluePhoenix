@@ -18,7 +18,7 @@ import { ShortcutSheet } from "../components/ShortcutSheet";
 import { ToastStack } from "../components/ToastStack";
 import { WorkspaceSwitcher } from "../components/WorkspaceSwitcher";
 import { SidebarProjects, pickSidebarProjects } from "../components/SidebarProjects";
-import { TimerBadge, TimerWidget } from "../components/TimerWidget";
+import { TimerWidget } from "../components/TimerWidget";
 import { Onboarding } from "./Onboarding";
 import { fabIntentFor, fabLabelFor, parsePath, pathFor, type Route, type WorkspacePage } from "../components/router";
 import { useUi } from "../stores/ui";
@@ -28,6 +28,7 @@ import { AiChatPanel } from "../features/ai/AiChatPanel";
 import { AiSetupPopup } from "../features/ai/AiSetupPopup";
 import { applyWorkspaceColor } from "../lib/theme";
 import { Overlay } from "../components/ui/Overlay";
+import { IconButton } from "../components/ui/Tooltip";
 import { formatCombo, digitIndex, isTypingTarget, matchesCombo } from "../lib/shortcuts";
 import {
   useAllProjects,
@@ -214,7 +215,7 @@ export function RootChrome() {
 
   return (
     <div className={`shell ${aiPanelOpen ? "ai-open" : ""}`}>
-      <Titlebar extra={<TimerBadge onOpenProject={openProjectById} />} />
+      <Titlebar />
       <a className="skip-link btn" href="#main">Skip to content</a>
       <aside className="sidebar">
         <WorkspaceSwitcher
@@ -222,10 +223,9 @@ export function RootChrome() {
           current={currentCategory}
           onSelect={(id) => go({ name: "workspace", categoryId: id, page: "overview" })}
         />
-        <button className="btn primary sidebar-new" type="button" onClick={openCreate}>
-          <Plus size={15} />
-          <span>{fabLabelFor(createIntent, currentCategory.terminology.itemSingular)}</span>
-          <kbd className="kbd">{formatCombo("mod+n")}</kbd>
+        <button className="btn primary sm sidebar-new" type="button" onClick={openCreate} title={`${fabLabelFor(createIntent, currentCategory.terminology.itemSingular)} (${formatCombo("mod+n")})`}>
+          <Plus size={14} />
+          {fabLabelFor(createIntent, currentCategory.terminology.itemSingular)}
         </button>
         <div className="sidebar-nav">
           <div className="nav-section">{currentCategory.name.toUpperCase()}</div>
@@ -250,11 +250,17 @@ export function RootChrome() {
         />
         <div className="sidebar-spacer" />
         <TimerWidget onOpenProject={openProjectById} />
-        <button className="nav-btn" type="button" onClick={() => go({ name: "achievements" })}><Award size={15} /> Achievements</button>
-        <button className="nav-btn" type="button" onClick={() => go({ name: "settings", tab: "appearance" })}><SettingsIcon size={15} /> Settings</button>
-        <div className="sidebar-sync muted">
-          <span className={`sync-dot ${bootstrap.sync.status === "sync_error" ? "error" : bootstrap.sync.pending ? "pending" : ""}`} />
-          {bootstrap.sync.label}
+        <div className="sidebar-foot">
+          <span className="sidebar-sync" title={bootstrap.sync.label}>
+            <span className={`sync-dot ${bootstrap.sync.status === "sync_error" ? "error" : bootstrap.sync.pending ? "pending" : ""}`} />
+            <span className="sidebar-sync-label">{bootstrap.sync.label}</span>
+          </span>
+          <IconButton label="Achievements" className="btn icon sm quiet" onClick={() => go({ name: "achievements" })}>
+            <Award size={15} />
+          </IconButton>
+          <IconButton label={`Settings (${formatCombo("mod+,")})`} className="btn icon sm quiet" onClick={() => go({ name: "settings", tab: "appearance" })}>
+            <SettingsIcon size={15} />
+          </IconButton>
         </div>
       </aside>
       <main className="main" id="main">

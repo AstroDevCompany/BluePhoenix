@@ -43,12 +43,14 @@ The sidebar lists your favorite and most recently opened projects with a live st
 
 Software project cards show live repository state: branch, commits ahead/behind, number of changed files, stash entries and the last commit. Status is read in the background (at start, when the window regains focus, and every minute and a half while it is focused), so the app never waits on git while you browse.
 
-Each card and project page has:
+Each card and project page keeps the main actions within reach and tucks the rest away:
 
-- **Editor**: opens the folder in your preferred editor. The caret lists every supported editor found on your machine (VS Code, Cursor, Zed, Sublime Text, JetBrains IDEs, Android Studio, Xcode) and remembers your choice.
-- **Terminal**: opens a shell in the project folder inside BluePhoenix. The caret opens your system terminal instead (Terminal, iTerm, Warp, Ghostty or kitty on macOS; Windows Terminal on Windows).
+- **Editor**: opens the folder in your preferred editor. The **⋯** menu lists every supported editor found on your machine (VS Code, Cursor, Zed, Sublime Text, JetBrains IDEs, Android Studio, Xcode) and remembers your choice, and lists your system terminals (Terminal, iTerm, Warp, Ghostty or kitty on macOS; Windows Terminal on Windows).
+- **Terminal** (project page): opens a shell in the project folder inside BluePhoenix.
 - **Run**: runs the pinned command. Click the main button to run it in the embedded terminal, or use the caret to run it in a system terminal or pick another saved command.
-- **Fetch / Pull / Push**: one button that offers the action that matters (Pull when behind, Push when ahead, otherwise Fetch), with the rest, stash and apply-stash in the caret menu. Failures name their cause: merge conflict, authentication, network, timeout, or local changes that block the operation.
+- **Pull / Push**: appears on a card only when there is something to pull or push. Fetch, stash and the rest are in the **⋯** menu. Failures name their cause: merge conflict, authentication, network, timeout, or local changes that block the operation.
+
+The star and **⋯** menu on a card appear when you hover it.
 
 The **Overview** dashboard of the Software workspace shows today's and this week's tracked time, repositories that need attention (with one-click actions and **Fetch all**), your next TODOs and anything still running in a terminal.
 
