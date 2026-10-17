@@ -1,6 +1,9 @@
-import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Category, Todo } from "../../lib/types";
-import { api } from "../../lib/ipc";
+import { api, formatError } from "../../lib/ipc";
+import { keys } from "../../lib/queries";
+import { useUi } from "../../stores/ui";
+import { ErrorNote } from "../../components/ui/ErrorNote";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { PageHeader } from "../../components/PageHeader";
 import { VirtualList } from "../../components/ui/VirtualList";
@@ -25,43 +28,47 @@ function TodoRow({
   );
 }
 
-export function TodosPage({ category, refreshKey = 0 }: { category: Category; refreshKey?: number }) {
-  const [todos, setTodos] = useState<Todo[]>([]);
-  const [ready, setReady] = useState(false);
-  const reload = () => api.listTodos({ categoryId: category.id }).then(setTodos);
-  useEffect(() => {
-    setReady(false);
-    void reload().finally(() => setReady(true));
-  }, [category.id, refreshKey]);
+export function TodosPage({ category }: { category: Category }) {
+  const client = useQueryClient();
+  const todosQuery = useQuery({
+    queryKey: keys.todos(category.id),
+    queryFn: () => api.listTodos({ categoryId: category.id }),
+  });
+  const toggle = useMutation({
+    mutationFn: (t: Todo) => api.setTodoStatus(t.id, t.status === "completed" ? "open" : "completed"),
+    // Flip the row immediately; the refetch below reconciles with the backend.
+    onMutate: async (t) => {
+      await client.cancelQueries({ queryKey: keys.todos(category.id) });
+      const previous = client.getQueryData<Todo[]>(keys.todos(category.id));
+      client.setQueryData<Todo[]>(keys.todos(category.id), (old) =>
+        old?.map((x) => (x.id === t.id ? { ...x, status: t.status === "completed" ? "open" : "completed" } : x)),
+      );
+      return { previous };
+    },
+    onError: (e, _t, ctx) => {
+      if (ctx?.previous) client.setQueryData(keys.todos(category.id), ctx.previous);
+      useUi.getState().showToast(formatError(e), "error");
+    },
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: keys.todos(category.id) });
+      void client.invalidateQueries({ queryKey: ["projects"] });
+    },
+  });
+  const todos = todosQuery.data ?? [];
+  const row = (t: Todo) => <TodoRow key={t.id} todo={t} onToggle={() => toggle.mutate(t)} />;
   return (
     <div>
       <PageHeader title="TODOs" kicker={category.name} />
-      {!ready ? (
+      {todosQuery.isError ? (
+        <ErrorNote error={todosQuery.error} onRetry={() => void todosQuery.refetch()} />
+      ) : todosQuery.isPending ? (
         <p className="muted">Loading…</p>
       ) : todos.length === 0 ? (
         <EmptyState title="Inbox is empty" body={`TODOs from ${category.terminology.itemPlural.toLowerCase()} appear here.`} />
       ) : todos.length > 24 ? (
-        <VirtualList
-          items={todos}
-          render={(t) => (
-            <TodoRow
-              todo={t}
-              onToggle={() =>
-                void api.setTodoStatus(t.id, t.status === "completed" ? "open" : "completed").then(() => void reload())
-              }
-            />
-          )}
-        />
+        <VirtualList items={todos} render={(t) => row(t)} />
       ) : (
-        todos.map((t) => (
-          <TodoRow
-            key={t.id}
-            todo={t}
-            onToggle={() =>
-              void api.setTodoStatus(t.id, t.status === "completed" ? "open" : "completed").then(() => void reload())
-            }
-          />
-        ))
+        todos.map(row)
       )}
     </div>
   );

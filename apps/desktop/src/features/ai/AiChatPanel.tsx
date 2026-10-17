@@ -90,7 +90,10 @@ export function AiChatPanel({ projectId }: { projectId?: string }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && open) useUi.getState().setAiPanel(false);
+      if (e.key === "Escape" && open && !e.defaultPrevented) {
+        e.preventDefault();
+        useUi.getState().setAiPanel(false);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

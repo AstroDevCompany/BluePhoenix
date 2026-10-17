@@ -1,25 +1,23 @@
-import { useEffect, useState } from "react";
 import { Play } from "lucide-react";
-import type { Category, ProjectCard } from "../../lib/types";
+import type { Category } from "../../lib/types";
 import { api, formatError } from "../../lib/ipc";
+import { useProjects } from "../../lib/queries";
+import { ErrorNote } from "../../components/ui/ErrorNote";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { PageHeader } from "../../components/PageHeader";
 import { useUi } from "../../stores/ui";
 
-export function CommandsPage({ category, refreshKey = 0 }: { category: Category; refreshKey?: number }) {
-  const [projects, setProjects] = useState<ProjectCard[]>([]);
-  const [ready, setReady] = useState(false);
+export function CommandsPage({ category }: { category: Category }) {
+  const projectsQuery = useProjects(category.id);
   const toast = useUi((s) => s.showToast);
   const confirm = useUi((s) => s.askConfirm);
-  useEffect(() => {
-    setReady(false);
-    void api.listProjects(category.id).then(setProjects).finally(() => setReady(true));
-  }, [category.id, refreshKey]);
-  const pinned = projects.filter((p) => p.pinnedCommand);
+  const pinned = (projectsQuery.data ?? []).filter((p) => p.pinnedCommand);
   return (
     <div>
       <PageHeader title="Commands" kicker={category.name} />
-      {!ready ? (
+      {projectsQuery.isError ? (
+        <ErrorNote error={projectsQuery.error} onRetry={() => void projectsQuery.refetch()} />
+      ) : projectsQuery.isPending ? (
         <p className="muted">Loading…</p>
       ) : pinned.length === 0 ? (
         <EmptyState title="No pinned commands" body="Pin a command on a software project to see it here." />

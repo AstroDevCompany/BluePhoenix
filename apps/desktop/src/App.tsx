@@ -7,6 +7,7 @@ import { parsePath, pathFor } from "./components/router";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { useUi } from "./stores/ui";
 import { applyAccent } from "./lib/theme";
+import { queryClient } from "./lib/queryClient";
 
 function hideHtmlSplash() {
   document.getElementById("boot-splash")?.setAttribute("hidden", "");
@@ -15,7 +16,6 @@ function hideHtmlSplash() {
 export default function App() {
   const [bootstrap, setBootstrap] = useState<Bootstrap | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
   const [minTimeElapsed, setMinTimeElapsed] = useState(false);
 
   const reload = useCallback(() => {
@@ -42,23 +42,6 @@ export default function App() {
       applyAccent(b.settings.accent);
     }).catch((e) => setError(formatError(e)));
   }, []);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!bootstrap || !(e.metaKey || e.ctrlKey) || e.key < "1" || e.key > "9") return;
-      const enabled = bootstrap.categories.filter((c) => c.enabled);
-      const idx = Number(e.key) - 1;
-      if (enabled[idx]) {
-        e.preventDefault();
-        void router.navigate({
-          to: "/workspace/$categoryId/$page",
-          params: { categoryId: enabled[idx].id, page: "overview" },
-        });
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [bootstrap]);
 
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -100,9 +83,8 @@ export default function App() {
       value={{
         bootstrap,
         reload,
-        refreshKey,
         bump: () => {
-          setRefreshKey((n) => n + 1);
+          void queryClient.invalidateQueries();
           reload();
         },
       }}

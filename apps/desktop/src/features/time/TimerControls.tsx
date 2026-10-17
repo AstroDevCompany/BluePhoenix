@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { api, formatError } from "../../lib/ipc";
-import { formatDuration } from "../../lib/format";
 import { useUi } from "../../stores/ui";
 
 export function elapsedFromStart(startedAt: string, nowMs = Date.now()) {
@@ -62,43 +61,4 @@ export function TimerControls({
       {label}
     </button>
   );
-}
-
-export function LiveTimerBadge() {
-  const [label, setLabel] = useState<string | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    let startedAt: string | null = null;
-    let name = "";
-    let local = true;
-    const refresh = () => {
-      void api.runningTimer().then((t) => {
-        if (cancelled) return;
-        if (!t) {
-          startedAt = null;
-          setLabel(null);
-          return;
-        }
-        startedAt = t.entry.startedAt;
-        name = t.projectName;
-        local = t.isLocalDevice;
-      });
-    };
-    refresh();
-    const poll = window.setInterval(refresh, 5000);
-    const tick = window.setInterval(() => {
-      if (!startedAt) return;
-      const text = local
-        ? `${name} · ${formatDuration(elapsedFromStart(startedAt))}`
-        : `Running on another device`;
-      setLabel(text);
-    }, 1000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(poll);
-      window.clearInterval(tick);
-    };
-  }, []);
-  if (!label) return null;
-  return <span className="badge" aria-live="polite">{label}</span>;
 }

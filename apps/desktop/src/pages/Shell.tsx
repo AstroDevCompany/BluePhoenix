@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo } from "react";
 import { Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   Award,
@@ -13,22 +13,35 @@ import {
 import type { Bootstrap, Category } from "../lib/types";
 import { Titlebar } from "../components/Titlebar";
 import { CommandPalette } from "../components/CommandPalette";
+import { ShortcutSheet } from "../components/ShortcutSheet";
+import { ToastStack } from "../components/ToastStack";
 import { WorkspaceSwitcher } from "../components/WorkspaceSwitcher";
+import { SidebarProjects, pickSidebarProjects } from "../components/SidebarProjects";
+import { TimerBadge, TimerWidget } from "../components/TimerWidget";
 import { Onboarding } from "./Onboarding";
 import { fabIntentFor, fabLabelFor, parsePath, pathFor, type Route, type WorkspacePage } from "../components/router";
 import { useUi } from "../stores/ui";
-import { LiveTimerBadge } from "../features/time/TimerControls";
 import { CreateProjectDialog } from "../features/projects/CreateProjectDialog";
 import { TabCreateDialog } from "../components/TabCreateDialog";
 import { AiChatPanel } from "../features/ai/AiChatPanel";
 import { AiSetupPopup } from "../features/ai/AiSetupPopup";
 import { applyWorkspaceColor } from "../lib/theme";
 import { Overlay } from "../components/ui/Overlay";
+import { formatCombo, digitIndex, isTypingTarget, matchesCombo } from "../lib/shortcuts";
+import {
+  useAllProjects,
+  useGitStatusEvents,
+  useProject,
+  useProjects,
+  useRunningTimer,
+  type ProjectWithCategory,
+} from "../lib/queries";
+import { openInEditor, startTimer, stopTimer } from "../lib/projectActions";
 
 export type ShellApi = {
   bootstrap: Bootstrap;
   reload: () => void;
-  refreshKey: number;
+  /** Reloads bootstrap data and invalidates every cached query. */
   bump: () => void;
 };
 
@@ -44,45 +57,151 @@ export function ShellProvider({ value, children }: { value: ShellApi; children: 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
+const NAV_ICONS: Record<string, typeof Code2> = {
+  overview: LayoutDashboard,
+  todos: ListTodo,
+  commands: Terminal,
+  exams: BookOpen,
+};
+
 export function RootChrome() {
   const { bootstrap, reload, bump } = useShell();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const toast = useUi((s) => s.toast);
   const confirm = useUi((s) => s.confirm);
   const closeConfirm = useUi((s) => s.closeConfirm);
   const createOpen = useUi((s) => s.createOpen);
   const closeCreate = useUi((s) => s.closeCreate);
   const openCreate = useUi((s) => s.openCreate);
+  const openPalette = useUi((s) => s.openPalette);
+  const setShortcuts = useUi((s) => s.setShortcuts);
   const aiPanelOpen = useUi((s) => s.aiPanelOpen);
+  const recentIds = useUi((s) => s.recentProjectIds);
 
-  const enabled = bootstrap.categories.filter((c) => c.enabled);
+  const enabled = useMemo(() => bootstrap.categories.filter((c) => c.enabled), [bootstrap.categories]);
   const fallback = bootstrap.settings.defaultWorkspace ?? enabled[0]?.id ?? "";
   const route = parsePath(pathname, fallback);
   const currentCategory: Category | undefined =
     route.name === "workspace" ? enabled.find((c) => c.id === route.categoryId) ?? enabled[0] : enabled[0];
+  const routeProjectId = route.name === "workspace" ? route.projectId : undefined;
+
+  useGitStatusEvents();
+  const allProjects = useAllProjects(enabled);
+  const { data: categoryProjects = [] } = useProjects(currentCategory?.id ?? "");
+  const { data: timer } = useRunningTimer();
+  const runningProjectId = timer && timer.isLocalDevice && !timer.entry.endedAt ? timer.entry.projectId : null;
+  const { data: routeProjectCard } = useProject(routeProjectId);
+
+  const currentProject: ProjectWithCategory | undefined = useMemo(() => {
+    if (!routeProjectId) return undefined;
+    const found = allProjects.find((pc) => pc.project.id === routeProjectId);
+    if (found) return found;
+    return routeProjectCard && currentCategory ? { project: routeProjectCard, category: currentCategory } : undefined;
+  }, [routeProjectId, allProjects, routeProjectCard, currentCategory]);
+
+  const sidebarProjects = useMemo(
+    () => (currentCategory?.kind === "university" ? [] : pickSidebarProjects(categoryProjects, recentIds)),
+    [categoryProjects, recentIds, currentCategory?.kind],
+  );
 
   useEffect(() => {
     applyWorkspaceColor(currentCategory?.accent);
   }, [currentCategory?.accent]);
 
   useEffect(() => {
-    if (!confirm) return;
+    if (routeProjectId) useUi.getState().touchProject(routeProjectId);
+  }, [routeProjectId]);
+
+  const go = useCallback(
+    (next: Route) => {
+      void navigate({ to: pathFor(next) as never });
+    },
+    [navigate],
+  );
+
+  const openProjectById = useCallback(
+    (projectId: string) => {
+      const pc = allProjects.find((p) => p.project.id === projectId);
+      if (pc) go({ name: "workspace", categoryId: pc.category.id, page: "items", projectId });
+    },
+    [allProjects, go],
+  );
+
+  const intent = route.name === "workspace" ? fabIntentFor(route) : null;
+  const createIntent = intent ?? "project";
+
+  // One place for every global shortcut.
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeConfirm();
+      if (!bootstrap.onboardingComplete) return;
+      const wsIdx = digitIndex(e, "mod");
+      if (wsIdx !== null && enabled[wsIdx]) {
+        e.preventDefault();
+        go({ name: "workspace", categoryId: enabled[wsIdx].id, page: "overview" });
+        return;
+      }
+      const jumpIdx = digitIndex(e, "alt");
+      if (jumpIdx !== null && sidebarProjects[jumpIdx] && currentCategory) {
+        e.preventDefault();
+        go({ name: "workspace", categoryId: currentCategory.id, page: "items", projectId: sidebarProjects[jumpIdx].id });
+        return;
+      }
+      if (matchesCombo(e, "mod+k")) {
+        e.preventDefault();
+        const st = useUi.getState();
+        if (st.paletteOpen) st.setPalette(false);
+        else openPalette("all");
+      } else if (matchesCombo(e, "mod+p")) {
+        e.preventDefault();
+        openPalette("projects");
+      } else if (matchesCombo(e, "mod+n")) {
+        e.preventDefault();
+        openCreate();
+      } else if (matchesCombo(e, "mod+,")) {
+        e.preventDefault();
+        go({ name: "settings", tab: "appearance" });
+      } else if (matchesCombo(e, "mod+shift+t")) {
+        e.preventDefault();
+        if (currentProject && runningProjectId !== currentProject.project.id) void startTimer(currentProject.project);
+        else if (runningProjectId) void stopTimer();
+      } else if (matchesCombo(e, "mod+e")) {
+        if (currentProject) {
+          e.preventDefault();
+          void openInEditor(currentProject.project);
+        }
+      } else if (matchesCombo(e, "?") && !isTypingTarget(e.target)) {
+        e.preventDefault();
+        setShortcuts(true);
+      } else if (
+        e.key === "Escape" &&
+        !e.defaultPrevented &&
+        !isTypingTarget(e.target) &&
+        routeProjectId &&
+        currentCategory
+      ) {
+        go({ name: "workspace", categoryId: currentCategory.id, page: "items" });
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [confirm, closeConfirm]);
-
-  const go = (next: Route) => {
-    void navigate({ to: pathFor(next) as never });
-  };
+  }, [
+    bootstrap.onboardingComplete,
+    enabled,
+    sidebarProjects,
+    currentCategory,
+    currentProject,
+    runningProjectId,
+    routeProjectId,
+    go,
+    openPalette,
+    openCreate,
+    setShortcuts,
+  ]);
 
   if (!bootstrap.onboardingComplete || route.name === "onboarding") {
     return (
       <div className="shell onboard">
-        <Titlebar extra={<LiveTimerBadge />} />
+        <Titlebar showSearch={false} />
         <main className="main">
           <Onboarding
             bootstrap={bootstrap}
@@ -92,6 +211,7 @@ export function RootChrome() {
             }}
           />
         </main>
+        <ToastStack />
       </div>
     );
   }
@@ -100,11 +220,9 @@ export function RootChrome() {
     return <div className="main">Enable a workspace in Settings.</div>;
   }
 
-  const intent = fabIntentFor(route);
-
   return (
     <div className={`shell ${aiPanelOpen ? "ai-open" : ""}`}>
-      <Titlebar extra={<LiveTimerBadge />} />
+      <Titlebar extra={<TimerBadge onOpenProject={openProjectById} />} />
       <a className="skip-link btn" href="#main">Skip to content</a>
       <aside className="sidebar">
         <WorkspaceSwitcher
@@ -112,12 +230,17 @@ export function RootChrome() {
           current={currentCategory}
           onSelect={(id) => go({ name: "workspace", categoryId: id, page: "overview" })}
         />
+        <button className="btn primary sidebar-new" type="button" onClick={openCreate}>
+          <Plus size={15} />
+          <span>{fabLabelFor(createIntent, currentCategory.terminology.itemSingular)}</span>
+          <kbd className="kbd">{formatCombo("mod+n")}</kbd>
+        </button>
         <div className="sidebar-nav">
           <div className="nav-section">{currentCategory.name.toUpperCase()}</div>
           {currentCategory.nav.filter((item) => item.id !== "activity").map((item) => {
-            const page = (item.id === "overview" ? "overview" : item.id === "items" ? "items" : item.id) as WorkspacePage;
-            const active = route.name === "workspace" && (route.page === page || (item.id === "items" && route.page === "items"));
-            const Icon = item.id === "overview" ? LayoutDashboard : item.id === "todos" ? ListTodo : item.id === "commands" ? Terminal : item.id === "exams" ? BookOpen : Code2;
+            const page = item.id as WorkspacePage;
+            const active = route.name === "workspace" && route.page === page;
+            const Icon = NAV_ICONS[item.id] ?? Code2;
             return (
               <button key={item.id} className={`nav-btn ${active ? "active" : ""}`} type="button" onClick={() => go({ name: "workspace", categoryId: currentCategory.id, page })}>
                 <Icon size={15} /> {item.label}
@@ -125,7 +248,16 @@ export function RootChrome() {
             );
           })}
         </div>
-        <div style={{ flex: 1 }} />
+        <SidebarProjects
+          category={currentCategory}
+          projects={sidebarProjects}
+          activeId={routeProjectId}
+          runningProjectId={runningProjectId}
+          onOpen={(id) => go({ name: "workspace", categoryId: currentCategory.id, page: "items", projectId: id })}
+          onAll={() => go({ name: "workspace", categoryId: currentCategory.id, page: "items" })}
+        />
+        <div className="sidebar-spacer" />
+        <TimerWidget onOpenProject={openProjectById} />
         <button className="nav-btn" type="button" onClick={() => go({ name: "achievements" })}><Award size={15} /> Achievements</button>
         <button className="nav-btn" type="button" onClick={() => go({ name: "settings", tab: "appearance" })}><SettingsIcon size={15} /> Settings</button>
         <div className="sidebar-sync muted">
@@ -136,14 +268,9 @@ export function RootChrome() {
       <main className="main" id="main">
         <Outlet />
       </main>
-      <AiChatPanel projectId={route.name === "workspace" ? route.projectId : undefined} />
+      <AiChatPanel projectId={routeProjectId} />
       <AiSetupPopup />
-      {intent ? (
-        <button className="btn primary fab-new" type="button" onClick={openCreate}>
-          <Plus size={16} /> {fabLabelFor(intent, currentCategory.terminology.itemSingular)}
-        </button>
-      ) : null}
-      {createOpen && intent === "project" ? (
+      {createOpen && createIntent === "project" ? (
         <CreateProjectDialog
           bootstrap={bootstrap}
           initialCategory={currentCategory.id}
@@ -155,9 +282,9 @@ export function RootChrome() {
           }}
         />
       ) : null}
-      {createOpen && intent && intent !== "project" ? (
+      {createOpen && createIntent !== "project" ? (
         <TabCreateDialog
-          kind={intent}
+          kind={createIntent}
           category={currentCategory}
           onClose={closeCreate}
           onCreated={() => {
@@ -166,11 +293,18 @@ export function RootChrome() {
           }}
         />
       ) : null}
-      <CommandPalette bootstrap={bootstrap} onNavigate={go} />
-      {toast ? <div className={`toast ${toast.tone === "error" ? "error" : ""}`} role="status">{toast.message}</div> : null}
+      <CommandPalette
+        bootstrap={bootstrap}
+        allProjects={allProjects}
+        currentProject={currentProject}
+        onNavigate={go}
+        onCreate={openCreate}
+      />
+      <ShortcutSheet />
+      <ToastStack />
       {confirm ? (
-        <Overlay onDismiss={closeConfirm}>
-          <div className="dialog" role="dialog" aria-modal="true">
+        <Overlay onDismiss={closeConfirm} label={confirm.title}>
+          <div className="dialog">
             <h2 className="h2">{confirm.title}</h2>
             <p className="muted">{confirm.body}</p>
             <div className="row" style={{ justifyContent: "flex-end" }}>

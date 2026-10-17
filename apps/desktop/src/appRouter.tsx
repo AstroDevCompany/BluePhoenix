@@ -30,7 +30,7 @@ const workspaceRoute = createRoute({
   path: "/workspace/$categoryId/$page",
   component: function WorkspaceRoute() {
     const { categoryId, page } = useParams({ from: "/workspace/$categoryId/$page" });
-    const { bootstrap, refreshKey, bump } = useShell();
+    const { bootstrap, bump } = useShell();
     const navigate = useNavigate();
     const category = bootstrap.categories.find((c) => c.id === categoryId && c.enabled)
       ?? bootstrap.categories.find((c) => c.enabled);
@@ -46,7 +46,6 @@ const workspaceRoute = createRoute({
           });
         }}
         onCreate={bump}
-        refreshKey={refreshKey}
       />
     );
   },
@@ -57,7 +56,7 @@ const projectRoute = createRoute({
   path: "/workspace/$categoryId/items/$projectId",
   component: function ProjectRoute() {
     const { categoryId, projectId } = useParams({ from: "/workspace/$categoryId/items/$projectId" });
-    const { bootstrap, refreshKey, bump } = useShell();
+    const { bootstrap, bump } = useShell();
     const navigate = useNavigate();
     const category = bootstrap.categories.find((c) => c.id === categoryId && c.enabled)
       ?? bootstrap.categories.find((c) => c.enabled);
@@ -74,7 +73,6 @@ const projectRoute = createRoute({
           });
         }}
         onCreate={bump}
-        refreshKey={refreshKey}
       />
     );
   },

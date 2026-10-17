@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "react";
+import { Check, ChevronsUpDown } from "lucide-react";
 import type { Category } from "../lib/types";
-import { useOpenTransition } from "./ui/useOpenTransition";
+import { Menu, MenuContent, MenuItem, MenuTrigger } from "./ui/Menu";
+import { formatCombo } from "../lib/shortcuts";
 
 export function WorkspaceSwitcher({
   categories,
@@ -11,51 +12,27 @@ export function WorkspaceSwitcher({
   current: Category;
   onSelect: (id: string) => void;
 }) {
-  const { open, visible, hide, toggle } = useOpenTransition();
-  const root = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const onDoc = (e: MouseEvent) => {
-      if (!root.current?.contains(e.target as Node)) hide();
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [hide]);
-
   return (
-    <div ref={root} style={{ position: "relative" }}>
-      <button
-        className="workspace-switch"
-        type="button"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        onClick={toggle}
-      >
-        {current.name}
-        <span className="muted">▼</span>
-      </button>
-      {visible ? (
-        <div
-          className={`switcher-menu menu-pop ${open ? "is-open" : "is-closing"}`}
-          role="listbox"
-        >
-          {categories.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              role="option"
-              aria-selected={c.id === current.id}
-              className={`nav-btn ${c.id === current.id ? "active" : ""}`}
-              onClick={() => {
-                onSelect(c.id);
-                hide();
-              }}
-            >
-              {c.name}
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
+    <Menu>
+      <MenuTrigger asChild>
+        <button className="workspace-switch" type="button" aria-label={`Workspace: ${current.name}`}>
+          <span className="workspace-dot" aria-hidden />
+          <span className="workspace-name">{current.name}</span>
+          <ChevronsUpDown size={14} className="muted" aria-hidden />
+        </button>
+      </MenuTrigger>
+      <MenuContent className="workspace-menu" style={{ minWidth: "var(--radix-dropdown-menu-trigger-width)" }}>
+        {categories.map((c, i) => (
+          <MenuItem
+            key={c.id}
+            icon={c.id === current.id ? <Check size={14} /> : undefined}
+            hint={i < 9 ? formatCombo(`mod+${i + 1}`) : undefined}
+            onSelect={() => onSelect(c.id)}
+          >
+            {c.name}
+          </MenuItem>
+        ))}
+      </MenuContent>
+    </Menu>
   );
 }

@@ -39,17 +39,6 @@ export function CreateProjectDialog({
   const languages = bootstrap.tags.filter((t) => t.kind === "language");
   const frameworks = bootstrap.tags.filter((t) => t.kind === "framework");
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      const target = e.target as HTMLElement | null;
-      if (target?.closest(".chip-editor")) return;
-      onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
   const toggle = (list: string[], id: string, set: (v: string[]) => void) => {
     set(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
   };
@@ -105,7 +94,11 @@ export function CreateProjectDialog({
   const fields = useMemo(() => kind, [kind]);
 
   return (
-    <Overlay onDismiss={onClose}>
+    <Overlay
+      onDismiss={onClose}
+      label="New project"
+      guardEscape={(e) => Boolean((e.target as HTMLElement | null)?.closest(".chip-editor"))}
+    >
       <div className="dialog" role="dialog" aria-modal="true">
         <h2 className="h2">What are you creating?</h2>
         <div className="row" style={{ marginBottom: 16 }}>

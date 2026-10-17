@@ -38,14 +38,6 @@ export function TabCreateDialog({
     });
   }, [category.id]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
   const heading = kind === "todo" ? "New TODO" : kind === "exam" ? "New exam" : "New command";
   const canSave = Boolean(projectId) && (kind === "todo" ? title.trim() : kind === "command" ? name.trim() && command.trim() : true);
 
@@ -87,7 +79,7 @@ export function TabCreateDialog({
   };
 
   return (
-    <Overlay onDismiss={onClose}>
+    <Overlay onDismiss={onClose} label="Create">
       <div className="dialog" role="dialog" aria-modal="true">
         <h2 className="h2">{heading}</h2>
         {projects.length === 0 ? (
